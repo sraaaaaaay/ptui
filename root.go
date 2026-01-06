@@ -1,0 +1,236 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type rootModel struct {
+	selectedTab int
+
+	tabs    []tea.Model
+	spinner spinner.Model
+
+	isExecutingCommand   bool
+	executingCommandName string
+
+	termWidth  int
+	termHeight int
+	panelWidth int
+
+	cmds []tea.Cmd
+}
+
+type ContentRectMsg struct {
+	Width, Height int
+}
+
+type hotkeyBinding struct {
+	shortcut    string
+	description string
+	command     func() tea.Cmd
+}
+
+type HotkeyPressedMsg struct {
+	hotkey hotkeyBinding
+}
+
+const BORDER_WIDTH = 2
+
+var (
+	black     = lipgloss.Color("#000000")
+	white     = lipgloss.Color("#FFFFFF")
+	darkBlue  = lipgloss.Color("#1919A6")
+	lightBlue = lipgloss.Color("#2121DE")
+	yellow    = lipgloss.Color("#FFFF00")
+
+	defaultStyle = lipgloss.NewStyle()
+	windowStyle  = lipgloss.NewStyle()
+
+	panelStyle = defaultStyle.
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(darkBlue).
+			Padding(0).
+			Margin(0)
+
+	tabStyle = defaultStyle.
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lightBlue).
+			PaddingLeft(2).
+			PaddingRight(2)
+
+	selectedTabStyle = tabStyle.
+				Foreground(yellow).
+				UnsetBorderBottom().
+				PaddingBottom(1)
+
+	selectedStyle = defaultStyle.Background(white).Foreground(black).Padding(0).Margin(0)
+	errorStyle    = defaultStyle.Foreground(lipgloss.Color("#FD0000"))
+	successStyle  = defaultStyle.Foreground(lipgloss.Color("#00FF00"))
+
+	reducedEmphasisStyle = defaultStyle.Foreground(lipgloss.Color("242"))
+	hotkeyStyle          = reducedEmphasisStyle.Underline(true).PaddingLeft(1)
+)
+
+var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+
+func initialModel() rootModel {
+	installedTab := initialInstalledModel()
+	browseTab := initialBrowseModel()
+
+	spinner := spinner.New(
+		spinner.WithSpinner(
+			spinner.Spinner{
+				Frames: []string{
+					defaultStyle.Foreground(yellow).Render(" ●"),
+					defaultStyle.Foreground(yellow).Render("  𜱭"),
+					defaultStyle.Foreground(yellow).Render("   ●"),
+					defaultStyle.Foreground(yellow).Render("    𜱭"),
+				},
+				FPS: time.Second / 3,
+			}))
+
+	return rootModel{
+		selectedTab: 0,
+		tabs:        []tea.Model{installedTab, browseTab},
+		spinner:     spinner,
+		cmds:        make([]tea.Cmd, 0, 6),
+	}
+}
+
+func (m rootModel) Init() tea.Cmd {
+	return m.InitSelectedTab()
+}
+
+func (m *rootModel) InitSelectedTab() tea.Cmd {
+	return m.tabs[m.selectedTab].Init()
+}
+
+func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
+	m.cmds = m.cmds[:0]
+
+	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if m.isExecutingCommand {
+			updated, cmd := m.spinner.Update(msg)
+			m.spinner = updated
+			m.cmds = append(m.cmds, cmd)
+		}
+
+	case tea.WindowSizeMsg:
+		m.termWidth, m.termHeight = msg.Width, msg.Height
+		m.panelWidth = int(float64(msg.Width) * 0.5)
+
+		for i, tab := range m.tabs {
+			updated, cmd := tab.Update(
+				ContentRectMsg{
+					Width:  msg.Width - 3*BORDER_WIDTH,
+					Height: msg.Height - 16},
+			)
+
+			m.tabs[i] = updated
+			if cmd != nil {
+				m.cmds = append(m.cmds, cmd)
+			}
+		}
+
+	case HotkeyPressedMsg:
+		m.executingCommandName = msg.hotkey.description
+		m.cmds = append(m.cmds, msg.hotkey.command())
+
+	case CommandStartMsg, CommandChunkMsg, CommandDoneMsg, installedInitMsg, browseInitMsg:
+		switch msg := msg.(type) {
+		case CommandStartMsg:
+			if msg.IsLongRunning {
+				m.isExecutingCommand = true
+				m.cmds = append(m.cmds, m.spinner.Tick)
+			}
+
+		case CommandDoneMsg:
+			m.isExecutingCommand = false
+			m.executingCommandName = ""
+		}
+
+		for i, tab := range m.tabs {
+			updated, cmd := tab.Update(msg)
+			m.tabs[i] = updated
+
+			if cmd != nil {
+				m.cmds = append(m.cmds, cmd)
+			}
+		}
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+
+		case "tab":
+			if m.selectedTab < len(m.tabs)-1 {
+				m.selectedTab++
+				m.cmds = append(m.cmds, m.InitSelectedTab())
+			}
+
+		case "shift+tab":
+			if m.selectedTab > 0 {
+				m.selectedTab--
+				m.cmds = append(m.cmds, m.InitSelectedTab())
+			}
+		}
+
+		updated, cmd := m.tabs[m.selectedTab].Update(msg)
+		m.tabs[m.selectedTab] = updated
+
+		if cmd != nil {
+			m.cmds = append(m.cmds, cmd)
+		}
+	}
+
+	return m, tea.Batch(m.cmds...)
+}
+
+func (m rootModel) View() string {
+	totalWidth := m.termWidth - BORDER_WIDTH
+	titlePanel := panelStyle.Bold(true).Render(lipgloss.PlaceHorizontal(
+		totalWidth,
+		lipgloss.Center,
+		APP_NAME))
+
+	installedTab := renderTab(m, "Installed", 0)
+	browseTab := renderTab(m, "Browse", 1)
+
+	tabPanel := windowStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, installedTab, browseTab))
+
+	if m.isExecutingCommand {
+		var text string
+		if m.executingCommandName == "" {
+			text = "Loading..."
+		} else {
+			text = fmt.Sprintf("Executing '%s'...", m.executingCommandName)
+		}
+
+		loader := tabStyle.Border(lipgloss.HiddenBorder()).Render(lipgloss.JoinHorizontal(lipgloss.Left, text, m.spinner.View()))
+		tabPanel = lipgloss.JoinHorizontal(lipgloss.Left, tabPanel, loader)
+	}
+
+	view := lipgloss.JoinVertical(lipgloss.Left, titlePanel, tabPanel)
+	tabView := panelStyle.Render(lipgloss.PlaceHorizontal(totalWidth, lipgloss.Left, m.tabs[m.selectedTab].View()))
+	view = lipgloss.JoinVertical(lipgloss.Center, view, tabView)
+
+	return windowStyle.Width(m.termWidth).Height(m.termHeight).Render(view)
+}
+
+func renderTab(m rootModel, title string, index int) (result string) {
+	if m.selectedTab == index {
+		result = selectedTabStyle.Render(title)
+	} else {
+		result = tabStyle.Render(reducedEmphasisStyle.Render(title))
+	}
+	return result
+}
