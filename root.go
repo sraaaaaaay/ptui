@@ -40,43 +40,6 @@ type HotkeyPressedMsg struct {
 	hotkey hotkeyBinding
 }
 
-const BORDER_WIDTH = 2
-
-var (
-	black     = lipgloss.Color("#000000")
-	white     = lipgloss.Color("#FFFFFF")
-	darkBlue  = lipgloss.Color("#1919A6")
-	lightBlue = lipgloss.Color("#2121DE")
-	yellow    = lipgloss.Color("#FFFF00")
-
-	defaultStyle = lipgloss.NewStyle()
-	windowStyle  = lipgloss.NewStyle()
-
-	panelStyle = defaultStyle.
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(darkBlue).
-			Padding(0).
-			Margin(0)
-
-	tabStyle = defaultStyle.
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lightBlue).
-			PaddingLeft(2).
-			PaddingRight(2)
-
-	selectedTabStyle = tabStyle.
-				Foreground(yellow).
-				UnsetBorderBottom().
-				PaddingBottom(1)
-
-	selectedStyle = defaultStyle.Background(white).Foreground(black).Padding(0).Margin(0)
-	errorStyle    = defaultStyle.Foreground(lipgloss.Color("#FD0000"))
-	successStyle  = defaultStyle.Foreground(lipgloss.Color("#00FF00"))
-
-	reducedEmphasisStyle = defaultStyle.Foreground(lipgloss.Color("242"))
-	hotkeyStyle          = reducedEmphasisStyle.Underline(true).PaddingLeft(1)
-)
-
 var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 
 func initialModel() rootModel {
@@ -105,10 +68,6 @@ func initialModel() rootModel {
 
 func (m rootModel) Init() tea.Cmd {
 	return m.InitSelectedTab()
-}
-
-func (m *rootModel) InitSelectedTab() tea.Cmd {
-	return m.tabs[m.selectedTab].Init()
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -157,15 +116,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.executingCommandName = ""
 		}
 
-		for i, tab := range m.tabs {
-			updated, cmd := tab.Update(msg)
-			m.tabs[i] = updated
-
-			if cmd != nil {
-				m.cmds = append(m.cmds, cmd)
-			}
-		}
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -186,7 +136,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		updated, cmd := m.tabs[m.selectedTab].Update(msg)
 		m.tabs[m.selectedTab] = updated
-
 		if cmd != nil {
 			m.cmds = append(m.cmds, cmd)
 		}
@@ -224,6 +173,10 @@ func (m rootModel) View() string {
 	view = lipgloss.JoinVertical(lipgloss.Center, view, tabView)
 
 	return windowStyle.Width(m.termWidth).Height(m.termHeight).Render(view)
+}
+
+func (m *rootModel) InitSelectedTab() tea.Cmd {
+	return m.tabs[m.selectedTab].Init()
 }
 
 func renderTab(m rootModel, title string, index int) (result string) {
