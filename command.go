@@ -16,6 +16,13 @@ import (
 
 type StreamTarget uint8
 
+const (
+	PackageList StreamTarget = iota
+	PackageInfo
+	Background
+	SearchResultList
+)
+
 type CommandStartMsg struct {
 	CommandId     int
 	Target        StreamTarget

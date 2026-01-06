@@ -12,14 +12,7 @@ import (
 )
 
 const NUM_COLUMNS = 2
-const (
-	PackageList = iota
-	PackageInfo
-	Background
-	SearchResultList
-)
 
-type handler[T tea.Model, M tea.Msg] func(T, M) tea.Cmd
 type installedInitMsg struct{} // Indicate tab setup I/O
 
 type installedModel struct {
@@ -445,12 +438,4 @@ func (m *installedModel) buildInfoList() {
 	}
 
 	m.infoViewport.SetContent(builder.String())
-}
-
-func matchesSearch(text string, search string) (match bool) {
-	if search == "" || strings.Contains(text, search) {
-		return true
-	}
-
-	return false
 }

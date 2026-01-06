@@ -26,20 +26,6 @@ type rootModel struct {
 	cmds []tea.Cmd
 }
 
-type ContentRectMsg struct {
-	Width, Height int
-}
-
-type hotkeyBinding struct {
-	shortcut    string
-	description string
-	command     func() tea.Cmd
-}
-
-type HotkeyPressedMsg struct {
-	hotkey hotkeyBinding
-}
-
 var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 
 func initialModel() rootModel {
