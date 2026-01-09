@@ -119,12 +119,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cmds = append(m.cmds, m.InitSelectedTab())
 			}
 		}
+	}
 
-		updated, cmd := m.tabs[m.selectedTab].Update(msg)
-		m.tabs[m.selectedTab] = updated
-		if cmd != nil {
-			m.cmds = append(m.cmds, cmd)
-		}
+	updated, cmd := m.tabs[m.selectedTab].Update(msg)
+	m.tabs[m.selectedTab] = updated
+	if cmd != nil {
+		m.cmds = append(m.cmds, cmd)
 	}
 
 	return m, tea.Batch(m.cmds...)
