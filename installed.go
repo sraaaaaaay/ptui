@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -429,10 +430,15 @@ func (m *installedModel) getInstalledPackages() tea.Cmd {
 }
 
 func (m *installedModel) getPackageInfo() tea.Cmd {
+	name, err := m.getSelectedPackageName()
+	if err != nil {
+		return nil
+	}
+
 	return cmd.NewCommand().
 		Operation("Q").
 		Options("i").
-		Arguments(m.getSelectedPackageName()).
+		Arguments(name).
 		Target(PackageInfo).
 		Run()
 }
@@ -455,10 +461,15 @@ func (m *installedModel) upgradeSelected() tea.Cmd {
 		return nil
 	}
 
+	name, err := m.getSelectedPackageName()
+	if err != nil {
+		return nil
+	}
+
 	return cmd.NewCommand().
 		Operation("S").
 		Options("y", "u").
-		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Arguments(name, "--noconfirm").
 		Target(Background).
 		Run()
 }
@@ -468,14 +479,23 @@ func (m *installedModel) removeSelected() tea.Cmd {
 		return nil
 	}
 
+	name, err := m.getSelectedPackageName()
+	if err != nil {
+		return nil
+	}
+
 	return cmd.NewCommand().
 		Operation("R").
 		Options("s").
-		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Arguments(name, "--noconfirm").
 		Target(Background).
 		Run()
 }
 
-func (m *installedModel) getSelectedPackageName() string {
-	return strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
+func (m *installedModel) getSelectedPackageName() (string, error) {
+	if len(m.visiblePackageLines) == 0 {
+		return "", errors.New("No packages in list")
+	}
+
+	return strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n"), nil
 }

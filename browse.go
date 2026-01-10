@@ -1,16 +1,18 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
+
+	cmd "ptui/command"
+	"ptui/types"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	cmd "ptui/command"
-	"ptui/types"
 )
 
 type browseModel struct {
@@ -177,7 +179,7 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cmds = append(m.cmds, func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: hotkey} })
 		}
 
-		if m.searchInput.Focused() {
+		if msg.String() != "/" && m.searchInput.Focused() {
 			oldVal := m.searchInput.Value()
 			updated, cmd := m.searchInput.Update(msg)
 			newVal := updated.Value()
@@ -271,6 +273,10 @@ func (m *browseModel) View() (final string) {
 }
 
 func (m *browseModel) toggleSearch() tea.Cmd {
+	if !m.isViewingList {
+		return nil
+	}
+
 	if m.searchInput.Focused() {
 		m.searchInput.Blur()
 	} else {
@@ -319,11 +325,17 @@ func (m *browseModel) buildInfoList() {
 
 func (m *browseModel) viewDetails() tea.Cmd {
 	m.isViewingList = false
+	m.searchInput.Blur()
+
+	name, err := m.getSelectedPackageName()
+	if err != nil {
+		return nil
+	}
 
 	return cmd.NewCommand().
 		Operation("S").
 		Options("i").
-		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Arguments(name, "--noconfirm").
 		Target(PackageInfo).
 		Run()
 }
@@ -342,6 +354,10 @@ func (m *browseModel) searchPackageDatabase(text string) tea.Cmd {
 		Run()
 }
 
-func (m *browseModel) getSelectedPackageName() string {
-	return strings.TrimSuffix(m.searchResultLines[m.visibleSearchResultLines[m.searchResultCursor]], "\n")
+func (m *browseModel) getSelectedPackageName() (string, error) {
+	if len(m.visibleSearchResultLines) == 0 {
+		return "", errors.New("No packages in list")
+	}
+
+	return strings.TrimSuffix(m.searchResultLines[m.visibleSearchResultLines[m.searchResultCursor]], "\n"), nil
 }
