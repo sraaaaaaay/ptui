@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	cmd "ptui/command"
@@ -153,7 +152,7 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.ContentRectMsg:
-		cw := msg.Width - 4
+		cw := msg.Width
 		ch := msg.Height - 2
 		if m.hasViewportDimensions {
 			m.fullHeight = msg.Height
@@ -246,32 +245,18 @@ func (m *browseModel) View() (final string) {
 		viewport = m.infoViewport.View()
 	}
 
-	n := max(1, len(m.visibleSearchResultLines))
-	size := max(1, int(math.Round(float64(lipgloss.Height(viewport))/float64(n))))
-
-	var scrollBar strings.Builder
-	for i := range size {
-		if i < size-1 {
-			scrollBar.WriteString("█\n")
-		} else {
-			scrollBar.WriteRune('█')
-		}
-	}
-	scrollBarString := scrollBar.String()
-
-	if m.isFinishedReadingLines {
-		yRelative := math.Round(
-			float64(m.searchResultCursor) *
-				float64(lipgloss.Height(viewport)) /
-				float64(len(m.visibleSearchResultLines)))
-
-		scrollBarString = defaultStyle.PaddingTop(int(yRelative)).Render(scrollBarString)
-	}
+	scrollBarString := createScrollbar(
+		2,
+		m.searchResultCursor,
+		len(m.visibleSearchResultLines),
+		lipgloss.Height(viewport),
+		m.isFinishedReadingLines,
+	)
 
 	mainPanel := lipgloss.JoinHorizontal(lipgloss.Left, viewport, scrollBarString)
 	final = lipgloss.JoinVertical(lipgloss.Left, topRow, mainPanel)
 
-	return panelStyle.Render(final)
+	return final
 }
 
 func (m *browseModel) toggleSearch() tea.Cmd {

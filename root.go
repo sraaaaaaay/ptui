@@ -36,6 +36,14 @@ const (
 	SearchResultList
 )
 
+var header = defaultStyle.Foreground(yellow).Render(`
+ ██████╗  ████████╗ ██╗   ██╗ ██╗
+ ██╔══██╗ ╚══██╔══╝ ██║   ██║ ██║
+ ██████╔╝    ██║    ██║   ██║ ██║
+ ██╔═══╝     ██║    ██║   ██║ ██║
+ ██║         ██║    ╚██████╔╝ ██║
+ ╚═╝         ╚═╝     ╚═════╝  ╚═╝`)
+
 var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 
 func initialModel() rootModel {
@@ -141,19 +149,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
-	asciiArt := defaultStyle.Foreground(yellow).Render(`
- ██████╗  ████████╗ ██╗   ██╗ ██╗
- ██╔══██╗ ╚══██╔══╝ ██║   ██║ ██║
- ██████╔╝    ██║    ██║   ██║ ██║
- ██╔═══╝     ██║    ██║   ██║ ██║
- ██║         ██║    ╚██████╔╝ ██║
- ╚═╝         ╚═╝     ╚═════╝  ╚═╝`)
 
 	totalWidth := m.termWidth - BORDER_WIDTH
 	titlePanel := panelStyle.Bold(true).Render(lipgloss.PlaceHorizontal(
 		totalWidth,
 		lipgloss.Center,
-		asciiArt))
+		header))
 
 	installedTab := renderTab(m, "Installed", 0)
 	browseTab := renderTab(m, "Browse", 1)

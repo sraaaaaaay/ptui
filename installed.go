@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	cmd "ptui/command"
@@ -283,27 +282,13 @@ func (m *installedModel) View() string {
 		listViewport = reducedEmphasisStyle.Render(listViewport)
 	}
 
-	n := max(1, len(m.visiblePackageLines))
-	size := max(1, int(math.Round(float64(lipgloss.Height(listViewport))/float64(n))))
-
-	var scrollBar strings.Builder
-	for i := range size {
-		if i < size-1 {
-			scrollBar.WriteString("█\n")
-		} else {
-			scrollBar.WriteRune('█')
-		}
-	}
-	scrollBarString := scrollBar.String()
-
-	if m.isFinishedReadingLines {
-		yRelative := math.Round(
-			float64(m.listCursor) *
-				float64(lipgloss.Height(listViewport)) /
-				float64(len(m.visiblePackageLines)))
-
-		scrollBarString = defaultStyle.PaddingTop(int(yRelative)).Render(scrollBarString)
-	}
+	scrollBarString := createScrollbar(
+		1,
+		m.listCursor,
+		len(m.visiblePackageLines),
+		lipgloss.Height(listViewport),
+		m.isFinishedReadingLines,
+	)
 
 	listViewport = lipgloss.JoinHorizontal(lipgloss.Left, listViewport, scrollBarString)
 	listPanel := lipgloss.JoinVertical(lipgloss.Left, topRow, listViewport)
