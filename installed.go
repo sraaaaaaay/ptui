@@ -262,7 +262,6 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *installedModel) View() string {
-
 	if !m.hasViewportDimensions {
 		return "Initialising..."
 	}
@@ -273,6 +272,7 @@ func (m *installedModel) View() string {
 	} else {
 		viewMode = "All"
 	}
+
 	counterText := reducedEmphasisStyle.Render(fmt.Sprintf("%d / %d (%s)", m.listCursor+1, len(m.visiblePackageLines), viewMode))
 	listViewport := m.listViewport.View()
 

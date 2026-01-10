@@ -20,7 +20,6 @@ func createScrollbar(width int, pos int, listLength int, contentHeight int, list
 	}
 
 	str := scrollBar.String()
-
 	if listLoaded {
 		yRelative := math.Round(
 			float64(pos) *

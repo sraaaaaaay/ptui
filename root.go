@@ -149,18 +149,19 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
-
 	totalWidth := m.termWidth - BORDER_WIDTH
-	titlePanel := panelStyle.Bold(true).Render(lipgloss.PlaceHorizontal(
+	titlePanel := panelStyle.Render(lipgloss.Place(
 		totalWidth,
+		lipgloss.Height(header)-BORDER_WIDTH,
 		lipgloss.Center,
-		header))
+		lipgloss.Center,
+		header,
+	))
 
 	installedTab := renderTab(m, "Installed", 0)
 	browseTab := renderTab(m, "Browse", 1)
 
 	tabPanel := windowStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, installedTab, browseTab))
-
 	if m.isExecutingCommand {
 		var text string
 		if m.executingCommandName == "" {
