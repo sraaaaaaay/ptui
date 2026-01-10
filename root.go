@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	cmd "ptui/command"
 )
 
 type rootModel struct {
@@ -89,15 +90,15 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.executingCommandName = msg.hotkey.description
 		m.cmds = append(m.cmds, msg.hotkey.command())
 
-	case CommandStartMsg, CommandChunkMsg, CommandDoneMsg, installedInitMsg, browseInitMsg:
+	case cmd.CommandStartMsg, cmd.CommandChunkMsg, cmd.CommandDoneMsg, installedInitMsg, browseInitMsg:
 		switch msg := msg.(type) {
-		case CommandStartMsg:
+		case cmd.CommandStartMsg:
 			if msg.IsLongRunning {
 				m.isExecutingCommand = true
 				m.cmds = append(m.cmds, m.spinner.Tick)
 			}
 
-		case CommandDoneMsg:
+		case cmd.CommandDoneMsg:
 			m.isExecutingCommand = false
 			m.executingCommandName = ""
 		}

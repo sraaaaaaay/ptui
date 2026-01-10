@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"ptui/command"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -10,7 +11,7 @@ import (
 const ROOT_USER_ID = 0
 const APP_NAME = "pTUI"
 
-var program *tea.Program
+var Program *tea.Program
 
 func main() {
 	if os.Geteuid() != ROOT_USER_ID {
@@ -18,8 +19,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	program = tea.NewProgram(initialModel())
-	if _, err := program.Run(); err != nil {
+	Program = tea.NewProgram(initialModel())
+	command.Program = Program
+
+	if _, err := Program.Run(); err != nil {
 		fmt.Printf("Error with the program, exiting: %v\n", err)
 		os.Exit(1)
 	}

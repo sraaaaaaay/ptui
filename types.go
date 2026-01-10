@@ -1,8 +1,12 @@
 package main
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"ptui/command"
 
-type handler[T tea.Model, M tea.Msg] func(T, M) tea.Cmd
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+type MessageRouter[T tea.Model, M tea.Msg] map[command.StreamTarget]func(T, M) tea.Cmd
 
 type ContentRectMsg struct {
 	Width, Height int

@@ -1,4 +1,4 @@
-package main
+package command
 
 import (
 	"bufio"
@@ -15,6 +15,8 @@ import (
 )
 
 type StreamTarget uint8
+
+var Program *tea.Program
 
 const (
 	PackageList StreamTarget = iota
@@ -43,6 +45,13 @@ type CommandDoneMsg struct {
 	Err       error
 }
 
+type Command struct {
+	operation string
+	options   []string
+	args      []string
+	target    StreamTarget
+}
+
 var mutex sync.Mutex
 
 func tryGetDbLock() bool {
@@ -53,39 +62,62 @@ func tryGetDbLock() bool {
 	}
 }
 
-func getInstalledPackages() tea.Cmd {
-	cmd := []string{"-Qq"}
+func NewCommand() *Command {
+	return &Command{}
+}
+
+func (c *Command) WithOperation(op string) *Command {
+	c.operation = "-" + op
+	return c
+}
+
+func (c *Command) WithOptions(opts ...string) *Command {
+	c.options = append(c.options, opts...)
+	return c
+}
+
+func (c *Command) WithArguments(args ...string) *Command {
+	c.args = append(c.args, args...)
+	return c
+}
+
+func (c *Command) WithTarget(target StreamTarget) *Command {
+	c.target = target
+	return c
+}
+
+func (c *Command) Run() tea.Cmd {
+	var allArgs []string
+	mainOp := c.operation + strings.Join(c.options, "")
+	allArgs = append(allArgs, mainOp)
+	allArgs = append(allArgs, c.args...)
+
+	return startCommand(allArgs, c.target, true)
+}
+
+func GetExplicitlyInstalledPackages() tea.Cmd {
+	cmd := []string{"Qqe", "--noconfirm"}
 	return startCommand(cmd, PackageList, true)
 }
 
-func getExplicitlyInstalledPackages() tea.Cmd {
-	cmd := []string{"-Qqe"}
-	return startCommand(cmd, PackageList, true)
-}
-
-func getPackageInfo(name string) tea.Cmd {
-	cmd := []string{"-Qi", strings.TrimSuffix(name, "\n")}
+func GetPackageInfo(name string) tea.Cmd {
+	cmd := []string{"-Qi", name, "--noconfirm"}
 	return startCommand(cmd, PackageInfo, false)
 }
 
-func upgradeAll() tea.Cmd {
+func UpgradeAll() tea.Cmd {
 	cmd := []string{"-Syu", "--noconfirm"}
 	return startCommand(cmd, Background, true)
 }
 
-func upgradeSelected(name string) tea.Cmd {
+func UpgradeSelected(name string) tea.Cmd {
 	cmd := []string{"-Syu", name, "--noconfirm"}
 	return startCommand(cmd, Background, true)
 }
 
-func removeSelected(name string) tea.Cmd {
+func RemoveSelected(name string) tea.Cmd {
 	cmd := []string{"-Rs", strings.TrimSuffix(name, "\n"), "--noconfirm"}
 	return startCommand(cmd, Background, true)
-}
-
-func searchPackageDatabase(searchText string) tea.Cmd {
-	cmd := []string{"-Ssq", searchText, "--noconfirm"}
-	return startCommand(cmd, SearchResultList, true)
 }
 
 var nextId atomic.Int32
@@ -98,22 +130,23 @@ func startCommand(args []string, target StreamTarget, isLongRunning bool) tea.Cm
 	// order when batching tea.Cmds. In order to distinguish
 	// concurrent pTUI commands from an external database lock,
 	// checks for both are required.
-	mutex.Lock()
+	return func() tea.Msg {
+		mutex.Lock()
+		defer mutex.Unlock()
 
-	// It is possible that the pacman database is locked
-	// by an another, such as a cron job or another instance
-	// of pTUI. If this is the case, exit early
-	if !tryGetDbLock() {
-		return func() tea.Msg {
-			return CommandDoneMsg{
-				CommandId: id,
-				Target:    target,
-				Err:       errors.New("could not acquire package database lock"),
+		// It is possible that the pacman database is locked
+		// by an another, such as a cron job or another instance
+		// of pTUI. If this is the case, exit early
+		if !tryGetDbLock() {
+			return func() tea.Msg {
+				return CommandDoneMsg{
+					CommandId: id,
+					Target:    target,
+					Err:       errors.New("could not acquire package database lock"),
+				}
 			}
 		}
-	}
 
-	return func() tea.Msg {
 		cmd := exec.Command("pacman", args...)
 
 		stdout, err := cmd.StdoutPipe()
@@ -149,10 +182,9 @@ func startCommand(args []string, target StreamTarget, isLongRunning bool) tea.Cm
 
 		go func() {
 			pipes.Wait()
-			program.Send(CommandDoneMsg{CommandId: id, Target: target, Err: cmd.Wait()})
+			Program.Send(CommandDoneMsg{CommandId: id, Target: target, Err: cmd.Wait()})
 		}()
 
-		mutex.Unlock()
 		return CommandStartMsg{CommandId: id, Target: target, Command: cmd, IsLongRunning: isLongRunning}
 
 	}
@@ -167,13 +199,13 @@ func streamLines(id int, target StreamTarget, reader io.Reader, isStdErr bool) {
 		batch = append(batch, sc.Text()+"\n")
 
 		if len(batch) >= batchSize {
-			program.Send(CommandChunkMsg{CommandId: id, Target: target, Lines: batch, IsError: isStdErr})
+			Program.Send(CommandChunkMsg{CommandId: id, Target: target, Lines: batch, IsError: isStdErr})
 			batch = make([]string, 0, batchSize)
 		}
 	}
 
 	if len(batch) > 0 {
-		program.Send(CommandChunkMsg{
+		Program.Send(CommandChunkMsg{
 			CommandId: id,
 			Target:    target,
 			Lines:     batch,
@@ -182,7 +214,7 @@ func streamLines(id int, target StreamTarget, reader io.Reader, isStdErr bool) {
 	}
 
 	if err := sc.Err(); err != nil {
-		program.Send(CommandChunkMsg{
+		Program.Send(CommandChunkMsg{
 			CommandId: id,
 			Target:    target,
 			Lines:     []string{fmt.Sprintf("%s", err)},

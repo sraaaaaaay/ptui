@@ -1,4 +1,4 @@
-module example/ptui
+module ptui
 
 go 1.25.4
 

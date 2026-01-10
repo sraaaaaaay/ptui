@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	cmd "ptui/command"
 )
 
 const NUM_COLUMNS = 2
@@ -39,9 +40,9 @@ type installedModel struct {
 
 	hotkeys map[string]hotkeyBinding
 
-	startRoutes map[StreamTarget]handler[*installedModel, CommandStartMsg]
-	chunkRoutes map[StreamTarget]handler[*installedModel, CommandChunkMsg]
-	doneRoutes  map[StreamTarget]handler[*installedModel, CommandDoneMsg]
+	startRoutes MessageRouter[*installedModel, cmd.CommandStartMsg]
+	chunkRoutes MessageRouter[*installedModel, cmd.CommandChunkMsg]
+	doneRoutes  MessageRouter[*installedModel, cmd.CommandDoneMsg]
 }
 
 func initialInstalledModel() *installedModel {
@@ -57,8 +58,8 @@ func initialInstalledModel() *installedModel {
 		cmds:    make([]tea.Cmd, 0, 6),
 		hotkeys: make(map[string]hotkeyBinding),
 
-		startRoutes: map[StreamTarget]handler[*installedModel, CommandStartMsg]{
-			PackageList: func(m *installedModel, msg CommandStartMsg) tea.Cmd {
+		startRoutes: MessageRouter[*installedModel, cmd.CommandStartMsg]{
+			cmd.PackageList: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.isFinishedReadingLines = false
 				m.listCmdId = msg.CommandId
 
@@ -68,15 +69,15 @@ func initialInstalledModel() *installedModel {
 				m.listViewport.SetContent("Loading installed packages...")
 				return nil
 			},
-			PackageInfo: func(m *installedModel, msg CommandStartMsg) tea.Cmd {
+			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.infoCmdId = msg.CommandId
 				m.infoLines = m.infoLines[:0]
 				return nil
 			},
 		},
 
-		chunkRoutes: map[StreamTarget]handler[*installedModel, CommandChunkMsg]{
-			PackageList: func(m *installedModel, msg CommandChunkMsg) tea.Cmd {
+		chunkRoutes: MessageRouter[*installedModel, cmd.CommandChunkMsg]{
+			cmd.PackageList: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if msg.CommandId != m.listCmdId {
 					return nil
 				}
@@ -85,7 +86,7 @@ func initialInstalledModel() *installedModel {
 				m.buildPackageList()
 				return nil
 			},
-			PackageInfo: func(m *installedModel, msg CommandChunkMsg) tea.Cmd {
+			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if msg.CommandId != m.infoCmdId {
 					return nil
 				}
@@ -96,8 +97,8 @@ func initialInstalledModel() *installedModel {
 			},
 		},
 
-		doneRoutes: map[StreamTarget]handler[*installedModel, CommandDoneMsg]{
-			PackageList: func(m *installedModel, msg CommandDoneMsg) tea.Cmd {
+		doneRoutes: MessageRouter[*installedModel, cmd.CommandDoneMsg]{
+			cmd.PackageList: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if msg.CommandId == m.listCmdId && msg.Err != nil {
 					m.packageLines = append(m.packageLines, fmt.Sprintf("\n%s\n", msg.Err))
 				}
@@ -105,11 +106,12 @@ func initialInstalledModel() *installedModel {
 				m.isFinishedReadingLines = true
 
 				if !m.searchInput.Focused() && len(m.visiblePackageLines) > 0 {
-					m.cmds = append(m.cmds, getPackageInfo(m.packageLines[m.visiblePackageLines[0]]))
+					name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[0]], "\n")
+					m.cmds = append(m.cmds, cmd.GetPackageInfo(name))
 				}
 				return nil
 			},
-			PackageInfo: func(m *installedModel, msg CommandDoneMsg) tea.Cmd {
+			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if msg.CommandId == m.infoCmdId && msg.Err != nil {
 					m.infoLines = append(m.infoLines, fmt.Sprintf("\n%s\n", msg.Err))
 					m.buildInfoList()
@@ -140,21 +142,21 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case installedInitMsg:
-		m.cmds = append(m.cmds, getInstalledPackages())
+		m.cmds = append(m.cmds, m.getInstalledPackages())
 
-	case CommandStartMsg:
+	case cmd.CommandStartMsg:
 		handler, exists := m.startRoutes[msg.Target]
 		if exists {
 			handler(m, msg)
 		}
 
-	case CommandChunkMsg:
+	case cmd.CommandChunkMsg:
 		handler, exists := m.chunkRoutes[msg.Target]
 		if exists {
 			handler(m, msg)
 		}
 
-	case CommandDoneMsg:
+	case cmd.CommandDoneMsg:
 		handler, exists := m.doneRoutes[msg.Target]
 		if exists {
 			handler(m, msg)
@@ -212,7 +214,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.buildPackageList()
 
 				if len(m.visiblePackageLines) > 0 {
-					m.cmds = append(m.cmds, getPackageInfo(m.packageLines[m.visiblePackageLines[0]]))
+					m.cmds = append(m.cmds, m.getPackageInfo())
 				} else {
 					m.infoLines = m.infoLines[:0]
 					m.infoViewport.SetContent("")
@@ -225,8 +227,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.listCursor--
 
 					m.buildPackageList()
-					pkg := m.packageLines[m.visiblePackageLines[m.listCursor]]
-					m.cmds = append(m.cmds, getPackageInfo(pkg))
+					m.cmds = append(m.cmds, m.getPackageInfo())
 
 					if m.listCursor < m.listViewport.YOffset {
 						updated, cmd := m.listViewport.Update(msg)
@@ -240,8 +241,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.listCursor++
 
 					m.buildPackageList()
-					pkg := m.packageLines[m.visiblePackageLines[m.listCursor]]
-					m.cmds = append(m.cmds, getPackageInfo(pkg))
+					m.cmds = append(m.cmds, m.getPackageInfo())
 
 					if m.listCursor >= m.listViewport.YOffset+m.listViewport.VisibleLineCount() {
 						updated, cmd := m.listViewport.Update(msg)
@@ -316,20 +316,12 @@ func (m *installedModel) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, leftCol, infoViewport)
 }
 
-func (m *installedModel) getInstalledPackages() tea.Cmd {
-	if m.searchInput.Focused() {
-		return nil
-	}
-
-	return getInstalledPackages()
-}
-
 func (m *installedModel) upgradeAll() tea.Cmd {
 	if m.searchInput.Focused() {
 		return nil
 	}
 
-	return upgradeAll()
+	return cmd.UpgradeAll()
 }
 
 func (m *installedModel) upgradeSelected() tea.Cmd {
@@ -338,7 +330,7 @@ func (m *installedModel) upgradeSelected() tea.Cmd {
 	}
 
 	selectedLine := m.packageLines[m.visiblePackageLines[m.listCursor]]
-	return upgradeSelected(selectedLine)
+	return cmd.UpgradeSelected(selectedLine)
 }
 
 func (m *installedModel) removeSelected() tea.Cmd {
@@ -347,7 +339,7 @@ func (m *installedModel) removeSelected() tea.Cmd {
 	}
 
 	selectedLine := m.packageLines[m.visiblePackageLines[m.listCursor]]
-	return removeSelected(selectedLine)
+	return cmd.RemoveSelected(selectedLine)
 }
 
 func (m *installedModel) toggleExplicitFilter() tea.Cmd {
@@ -359,9 +351,9 @@ func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 	m.isFilteringExplicitInstall = isFiltering
 
 	if isFiltering {
-		return getExplicitlyInstalledPackages()
+		return cmd.GetExplicitlyInstalledPackages()
 	} else {
-		return getInstalledPackages()
+		return m.getInstalledPackages()
 	}
 }
 
@@ -438,4 +430,27 @@ func (m *installedModel) buildInfoList() {
 	}
 
 	m.infoViewport.SetContent(builder.String())
+}
+
+func (m *installedModel) getInstalledPackages() tea.Cmd {
+	if m.searchInput.Focused() {
+		return nil
+	}
+
+	return cmd.NewCommand().
+		WithOperation("Q").
+		WithOptions("q").
+		WithTarget(cmd.PackageList).
+		Run()
+}
+
+func (m *installedModel) getPackageInfo() tea.Cmd {
+	selectedPackage := m.packageLines[m.visiblePackageLines[m.listCursor]]
+
+	return cmd.NewCommand().
+		WithOperation("Q").
+		WithOptions("i").
+		WithArguments(selectedPackage).
+		WithTarget(cmd.PackageInfo).
+		Run()
 }
