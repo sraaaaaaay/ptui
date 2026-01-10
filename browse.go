@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	cmd "ptui/command"
+	"ptui/types"
 )
 
 type browseModel struct {
@@ -32,11 +33,11 @@ type browseModel struct {
 	isFinishedReadingLines bool
 	isViewingList          bool
 
-	hotkeys map[string]hotkeyBinding
+	hotkeys map[string]types.HotkeyBinding
 
-	startRoutes MessageRouter[*browseModel, cmd.CommandStartMsg]
-	chunkRoutes MessageRouter[*browseModel, cmd.CommandChunkMsg]
-	doneRoutes  MessageRouter[*browseModel, cmd.CommandDoneMsg]
+	startRoutes types.MessageRouter[*browseModel, cmd.CommandStartMsg]
+	chunkRoutes types.MessageRouter[*browseModel, cmd.CommandChunkMsg]
+	doneRoutes  types.MessageRouter[*browseModel, cmd.CommandDoneMsg]
 
 	cmds []tea.Cmd
 }
@@ -47,9 +48,9 @@ func initialBrowseModel() *browseModel {
 	model := browseModel{
 		searchResultCursor: 0,
 		isViewingList:      true,
-		hotkeys:            make(map[string]hotkeyBinding),
-		startRoutes: MessageRouter[*browseModel, cmd.CommandStartMsg]{
-			cmd.SearchResultList: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
+		hotkeys:            make(map[string]types.HotkeyBinding),
+		startRoutes: types.MessageRouter[*browseModel, cmd.CommandStartMsg]{
+			SearchResultList: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.isFinishedReadingLines = false
 				m.listCmdId = msg.CommandId
 				m.searchResultLines = m.searchResultLines[:0]
@@ -58,14 +59,14 @@ func initialBrowseModel() *browseModel {
 				m.listViewport.SetContent("Loading results...")
 				return nil
 			},
-			cmd.PackageInfo: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
+			PackageInfo: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.infoCmdId = msg.CommandId
 				m.infoLines = m.infoLines[:0]
 				return nil
 			},
 		},
-		chunkRoutes: MessageRouter[*browseModel, cmd.CommandChunkMsg]{
-			cmd.SearchResultList: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
+		chunkRoutes: types.MessageRouter[*browseModel, cmd.CommandChunkMsg]{
+			SearchResultList: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if m.listCmdId != msg.CommandId {
 					return nil
 				}
@@ -74,7 +75,7 @@ func initialBrowseModel() *browseModel {
 				m.buildPackageList()
 				return nil
 			},
-			cmd.PackageInfo: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
+			PackageInfo: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if msg.CommandId != m.infoCmdId {
 					return nil
 				}
@@ -84,8 +85,8 @@ func initialBrowseModel() *browseModel {
 				return nil
 			},
 		},
-		doneRoutes: MessageRouter[*browseModel, cmd.CommandDoneMsg]{
-			cmd.SearchResultList: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
+		doneRoutes: types.MessageRouter[*browseModel, cmd.CommandDoneMsg]{
+			SearchResultList: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if m.listCmdId != msg.CommandId {
 					return nil
 				}
@@ -99,7 +100,7 @@ func initialBrowseModel() *browseModel {
 
 				return nil
 			},
-			cmd.PackageInfo: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
+			PackageInfo: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if msg.CommandId == m.infoCmdId && msg.Err != nil {
 					m.infoLines = append(m.infoLines, fmt.Sprintf("\n%s\n", msg.Err))
 					m.buildInfoList()
@@ -109,11 +110,15 @@ func initialBrowseModel() *browseModel {
 		},
 	}
 
-	model.hotkeys["/"] = hotkeyBinding{"/", "Toggle Search", model.toggleSearch}
-	model.hotkeys["enter"] = hotkeyBinding{"Enter", "View Details", model.viewDetails}
-	model.hotkeys["esc"] = hotkeyBinding{"Esc", "Close Details", model.closeDetails}
+	model.createHotkey("/", "/", "Toggle Search", model.toggleSearch)
+	model.createHotkey("enter", "Enter", "View Details", model.viewDetails)
+	model.createHotkey("esc", "Esc", "Close Details", model.closeDetails)
 
 	return &model
+}
+
+func (m *browseModel) createHotkey(key string, displayKey string, description string, action func() tea.Cmd) {
+	m.hotkeys[key] = types.HotkeyBinding{Shortcut: displayKey, Description: description, Command: action}
 }
 
 func (m *browseModel) Init() tea.Cmd {
@@ -145,7 +150,7 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			handler(m, msg)
 		}
 
-	case ContentRectMsg:
+	case types.ContentRectMsg:
 		if m.hasViewportDimensions {
 			m.fullHeight = msg.Height
 
@@ -169,7 +174,7 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		hotkey, exists := m.hotkeys[msg.String()]
 
 		if exists {
-			m.cmds = append(m.cmds, func() tea.Msg { return HotkeyPressedMsg{hotkey: hotkey} })
+			m.cmds = append(m.cmds, func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: hotkey} })
 		}
 
 		if m.searchInput.Focused() {
@@ -314,13 +319,12 @@ func (m *browseModel) buildInfoList() {
 
 func (m *browseModel) viewDetails() tea.Cmd {
 	m.isViewingList = false
-	name := strings.TrimSuffix(m.searchResultLines[m.visibleSearchResultLines[m.searchResultCursor]], "\n")
 
 	return cmd.NewCommand().
 		Operation("S").
 		Options("i").
-		Arguments(name, "--noconfirm").
-		Target(cmd.PackageInfo).
+		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Target(PackageInfo).
 		Run()
 }
 
@@ -334,6 +338,10 @@ func (m *browseModel) searchPackageDatabase(text string) tea.Cmd {
 		Operation("S").
 		Options("s", "q").
 		Arguments(text, "--noconfirm").
-		Target(cmd.SearchResultList).
+		Target(SearchResultList).
 		Run()
+}
+
+func (m *browseModel) getSelectedPackageName() string {
+	return strings.TrimSuffix(m.searchResultLines[m.visibleSearchResultLines[m.searchResultCursor]], "\n")
 }

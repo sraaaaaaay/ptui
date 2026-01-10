@@ -12,36 +12,28 @@ import (
 	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"ptui/types"
 )
-
-type StreamTarget uint8
 
 var Program *tea.Program
 
-const (
-	PackageList StreamTarget = iota
-	PackageInfo
-	Background
-	SearchResultList
-)
-
 type CommandStartMsg struct {
 	CommandId     int
-	Target        StreamTarget
+	Target        types.StreamTarget
 	Command       *exec.Cmd
 	IsLongRunning bool
 }
 
 type CommandChunkMsg struct {
 	CommandId int
-	Target    StreamTarget
+	Target    types.StreamTarget
 	Lines     []string
 	IsError   bool
 }
 
 type CommandDoneMsg struct {
 	CommandId int
-	Target    StreamTarget
+	Target    types.StreamTarget
 	Err       error
 }
 
@@ -49,7 +41,7 @@ type Command struct {
 	operation string
 	options   []string
 	args      []string
-	target    StreamTarget
+	target    types.StreamTarget
 }
 
 var mutex sync.Mutex
@@ -73,7 +65,7 @@ func (c *Command) Arguments(args ...string) *Command {
 	return c
 }
 
-func (c *Command) Target(target StreamTarget) *Command {
+func (c *Command) Target(target types.StreamTarget) *Command {
 	c.target = target
 	return c
 }
@@ -89,7 +81,7 @@ func (c *Command) Run() tea.Cmd {
 
 var nextId atomic.Int32
 
-func startCommand(args []string, target StreamTarget, isLongRunning bool) tea.Cmd {
+func startCommand(args []string, target types.StreamTarget, isLongRunning bool) tea.Cmd {
 	id := (int)(nextId.Load())
 	nextId.Add(1)
 
@@ -165,7 +157,7 @@ func tryGetDbLock() bool {
 	}
 }
 
-func streamLines(id int, target StreamTarget, reader io.Reader, isStdErr bool) {
+func streamLines(id int, target types.StreamTarget, reader io.Reader, isStdErr bool) {
 	sc := bufio.NewScanner(reader)
 	const batchSize = 100
 

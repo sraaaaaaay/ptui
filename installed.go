@@ -5,11 +5,13 @@ import (
 	"math"
 	"strings"
 
+	cmd "ptui/command"
+	"ptui/types"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	cmd "ptui/command"
 )
 
 const NUM_COLUMNS = 2
@@ -38,11 +40,11 @@ type installedModel struct {
 
 	cmds []tea.Cmd
 
-	hotkeys map[string]hotkeyBinding
+	hotkeys map[string]types.HotkeyBinding
 
-	startRoutes MessageRouter[*installedModel, cmd.CommandStartMsg]
-	chunkRoutes MessageRouter[*installedModel, cmd.CommandChunkMsg]
-	doneRoutes  MessageRouter[*installedModel, cmd.CommandDoneMsg]
+	startRoutes types.MessageRouter[*installedModel, cmd.CommandStartMsg]
+	chunkRoutes types.MessageRouter[*installedModel, cmd.CommandChunkMsg]
+	doneRoutes  types.MessageRouter[*installedModel, cmd.CommandDoneMsg]
 }
 
 func initialInstalledModel() *installedModel {
@@ -56,10 +58,10 @@ func initialInstalledModel() *installedModel {
 		isFinishedReadingLines: false,
 
 		cmds:    make([]tea.Cmd, 0, 6),
-		hotkeys: make(map[string]hotkeyBinding),
+		hotkeys: make(map[string]types.HotkeyBinding),
 
-		startRoutes: MessageRouter[*installedModel, cmd.CommandStartMsg]{
-			cmd.PackageList: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
+		startRoutes: types.MessageRouter[*installedModel, cmd.CommandStartMsg]{
+			PackageList: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.isFinishedReadingLines = false
 				m.listCmdId = msg.CommandId
 
@@ -69,15 +71,15 @@ func initialInstalledModel() *installedModel {
 				m.listViewport.SetContent("Loading installed packages...")
 				return nil
 			},
-			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
+			PackageInfo: func(m *installedModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.infoCmdId = msg.CommandId
 				m.infoLines = m.infoLines[:0]
 				return nil
 			},
 		},
 
-		chunkRoutes: MessageRouter[*installedModel, cmd.CommandChunkMsg]{
-			cmd.PackageList: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
+		chunkRoutes: types.MessageRouter[*installedModel, cmd.CommandChunkMsg]{
+			PackageList: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if msg.CommandId != m.listCmdId {
 					return nil
 				}
@@ -86,7 +88,7 @@ func initialInstalledModel() *installedModel {
 				m.buildPackageList()
 				return nil
 			},
-			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
+			PackageInfo: func(m *installedModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if msg.CommandId != m.infoCmdId {
 					return nil
 				}
@@ -97,8 +99,8 @@ func initialInstalledModel() *installedModel {
 			},
 		},
 
-		doneRoutes: MessageRouter[*installedModel, cmd.CommandDoneMsg]{
-			cmd.PackageList: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
+		doneRoutes: types.MessageRouter[*installedModel, cmd.CommandDoneMsg]{
+			PackageList: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if msg.CommandId == m.listCmdId && msg.Err != nil {
 					m.packageLines = append(m.packageLines, fmt.Sprintf("\n%s\n", msg.Err))
 				}
@@ -110,7 +112,7 @@ func initialInstalledModel() *installedModel {
 				}
 				return nil
 			},
-			cmd.PackageInfo: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
+			PackageInfo: func(m *installedModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if msg.CommandId == m.infoCmdId && msg.Err != nil {
 					m.infoLines = append(m.infoLines, fmt.Sprintf("\n%s\n", msg.Err))
 					m.buildInfoList()
@@ -120,15 +122,19 @@ func initialInstalledModel() *installedModel {
 		},
 	}
 
-	model.hotkeys["enter"] = hotkeyBinding{"Enter", "Toggle Search", model.toggleSearch}
-	model.hotkeys["A"] = hotkeyBinding{"A", "Upgrade All", model.upgradeAll}
-	model.hotkeys["D"] = hotkeyBinding{"D", "Remove Selected", model.removeSelected}
-	model.hotkeys["E"] = hotkeyBinding{"E", "Show/Hide Explicitly Installed", model.toggleExplicitFilter}
-	model.hotkeys["H"] = hotkeyBinding{"H", "Show/Hide Hotkeys", model.toggleHotkeyPanel}
-	model.hotkeys["R"] = hotkeyBinding{"R", "Refresh List", model.getInstalledPackages}
-	model.hotkeys["U"] = hotkeyBinding{"U", "Upgrade Selected", model.upgradeSelected}
+	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
+	model.createHotkey("A", "A", "Upgrade All", model.upgradeAll)
+	model.createHotkey("D", "D", "Remove Selected", model.removeSelected)
+	model.createHotkey("E", "E", "Show/Hide Explicitly Installed", model.toggleExplicitFilter)
+	model.createHotkey("H", "H", "Show/Hide Hotkeys", model.toggleHotkeyPanel)
+	model.createHotkey("R", "R", "Refresh List", model.getInstalledPackages)
+	model.createHotkey("U", "U", "Upgrade Selected", model.upgradeSelected)
 
 	return &model
+}
+
+func (m *installedModel) createHotkey(key string, displayKey string, description string, action func() tea.Cmd) {
+	m.hotkeys[key] = types.HotkeyBinding{Shortcut: displayKey, Description: description, Command: action}
 }
 
 func (m *installedModel) Init() tea.Cmd {
@@ -161,7 +167,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			handler(m, msg)
 		}
 
-	case ContentRectMsg:
+	case types.ContentRectMsg:
 		m.fullHeight = msg.Height
 		lw := int(float32(msg.Width) * float32(0.4))
 		rw := msg.Width - lw - 1
@@ -195,7 +201,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		val, hotkeyExists := m.hotkeys[msg.String()]
 		if hotkeyExists {
-			m.cmds = append(m.cmds, func() tea.Msg { return HotkeyPressedMsg{hotkey: val} })
+			m.cmds = append(m.cmds, func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: val} })
 		}
 
 		if m.searchInput.Focused() {
@@ -348,9 +354,9 @@ func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
 		list.WriteString(
 			fmt.Sprintf(
 				"%s%s%s\n",
-				hotkeyStyle.Render(shortcut.shortcut),
-				strings.Repeat(" ", m.hotkeyViewport.Width-len(shortcut.shortcut)-len(shortcut.description)-1),
-				reducedEmphasisStyle.Render(shortcut.description),
+				hotkeyStyle.Render(shortcut.Shortcut),
+				strings.Repeat(" ", m.hotkeyViewport.Width-len(shortcut.Shortcut)-len(shortcut.Description)-1),
+				reducedEmphasisStyle.Render(shortcut.Description),
 			),
 		)
 	}
@@ -413,7 +419,7 @@ func (m *installedModel) getInstalledPackages() tea.Cmd {
 	cmd := cmd.NewCommand().
 		Operation("Q").
 		Options("q").
-		Target(cmd.PackageList)
+		Target(PackageList)
 
 	if m.isFilteringExplicitInstall {
 		cmd.Options("e")
@@ -423,13 +429,11 @@ func (m *installedModel) getInstalledPackages() tea.Cmd {
 }
 
 func (m *installedModel) getPackageInfo() tea.Cmd {
-	selectedPackage := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
-
 	return cmd.NewCommand().
 		Operation("Q").
 		Options("i").
-		Arguments(selectedPackage).
-		Target(cmd.PackageInfo).
+		Arguments(m.getSelectedPackageName()).
+		Target(PackageInfo).
 		Run()
 }
 
@@ -442,7 +446,7 @@ func (m *installedModel) upgradeAll() tea.Cmd {
 		Operation("S").
 		Options("y", "u").
 		Arguments("--noconfirm").
-		Target(cmd.Background).
+		Target(Background).
 		Run()
 }
 
@@ -451,11 +455,11 @@ func (m *installedModel) upgradeSelected() tea.Cmd {
 		return nil
 	}
 
-	name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
 	return cmd.NewCommand().
 		Operation("S").
 		Options("y", "u").
-		Arguments(name, "--noconfirm").
+		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Target(Background).
 		Run()
 }
 
@@ -464,10 +468,14 @@ func (m *installedModel) removeSelected() tea.Cmd {
 		return nil
 	}
 
-	name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
 	return cmd.NewCommand().
 		Operation("R").
 		Options("s").
-		Arguments(name, "--noconfirm").
+		Arguments(m.getSelectedPackageName(), "--noconfirm").
+		Target(Background).
 		Run()
+}
+
+func (m *installedModel) getSelectedPackageName() string {
+	return strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
 }

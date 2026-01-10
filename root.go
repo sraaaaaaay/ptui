@@ -5,10 +5,12 @@ import (
 	"os"
 	"time"
 
+	cmd "ptui/command"
+	"ptui/types"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	cmd "ptui/command"
 )
 
 type rootModel struct {
@@ -26,6 +28,13 @@ type rootModel struct {
 
 	cmds []tea.Cmd
 }
+
+const (
+	PackageList types.StreamTarget = iota
+	PackageInfo
+	Background
+	SearchResultList
+)
 
 var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 
@@ -75,7 +84,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		for i, tab := range m.tabs {
 			updated, cmd := tab.Update(
-				ContentRectMsg{
+				types.ContentRectMsg{
 					Width:  msg.Width - 3*BORDER_WIDTH,
 					Height: msg.Height - 16},
 			)
@@ -86,9 +95,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case HotkeyPressedMsg:
-		m.executingCommandName = msg.hotkey.description
-		m.cmds = append(m.cmds, msg.hotkey.command())
+	case types.HotkeyPressedMsg:
+		m.executingCommandName = msg.Hotkey.Description
+		m.cmds = append(m.cmds, msg.Hotkey.Command())
 
 	case cmd.CommandStartMsg, cmd.CommandChunkMsg, cmd.CommandDoneMsg, installedInitMsg, browseInitMsg:
 		switch msg := msg.(type) {
