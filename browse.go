@@ -153,22 +153,24 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.ContentRectMsg:
+		cw := msg.Width - 4
+		ch := msg.Height - 2
 		if m.hasViewportDimensions {
 			m.fullHeight = msg.Height
 
-			m.listViewport.Height = msg.Height
+			m.listViewport.Height = ch
 			m.listViewport.Width = msg.Width
 
-			m.infoViewport.Height = msg.Height
+			m.infoViewport.Height = ch
 			m.infoViewport.Width = msg.Width
 
-			m.searchInput.Width = msg.Width - 4
+			m.searchInput.Width = cw
 		} else {
-			m.listViewport = viewport.New(msg.Width, msg.Height)
-			m.infoViewport = viewport.New(msg.Width, msg.Height)
+			m.listViewport = viewport.New(msg.Width, ch)
+			m.infoViewport = viewport.New(msg.Width, ch)
 
 			m.searchInput = textinput.New()
-			m.searchInput.Width = msg.Width - 4
+			m.searchInput.Width = cw
 
 			m.hasViewportDimensions = true
 		}

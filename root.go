@@ -141,11 +141,19 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
+	asciiArt := defaultStyle.Foreground(yellow).Render(`
+ ██████╗  ████████╗ ██╗   ██╗ ██╗
+ ██╔══██╗ ╚══██╔══╝ ██║   ██║ ██║
+ ██████╔╝    ██║    ██║   ██║ ██║
+ ██╔═══╝     ██║    ██║   ██║ ██║
+ ██║         ██║    ╚██████╔╝ ██║
+ ╚═╝         ╚═╝     ╚═════╝  ╚═╝`)
+
 	totalWidth := m.termWidth - BORDER_WIDTH
 	titlePanel := panelStyle.Bold(true).Render(lipgloss.PlaceHorizontal(
 		totalWidth,
 		lipgloss.Center,
-		APP_NAME))
+		asciiArt))
 
 	installedTab := renderTab(m, "Installed", 0)
 	browseTab := renderTab(m, "Browse", 1)
