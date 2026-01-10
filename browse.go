@@ -317,10 +317,10 @@ func (m *browseModel) viewDetails() tea.Cmd {
 	name := strings.TrimSuffix(m.searchResultLines[m.visibleSearchResultLines[m.searchResultCursor]], "\n")
 
 	return cmd.NewCommand().
-		WithOperation("S").
-		WithOptions("i").
-		WithArguments(name, "--noconfirm").
-		WithTarget(cmd.PackageInfo).
+		Operation("S").
+		Options("i").
+		Arguments(name, "--noconfirm").
+		Target(cmd.PackageInfo).
 		Run()
 }
 
@@ -331,9 +331,9 @@ func (m *browseModel) closeDetails() tea.Cmd {
 
 func (m *browseModel) searchPackageDatabase(text string) tea.Cmd {
 	return cmd.NewCommand().
-		WithOperation("S").
-		WithOptions("s", "q").
-		WithArguments(text, "--noconfirm").
-		WithTarget(cmd.SearchResultList).
+		Operation("S").
+		Options("s", "q").
+		Arguments(text, "--noconfirm").
+		Target(cmd.SearchResultList).
 		Run()
 }

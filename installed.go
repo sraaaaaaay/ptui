@@ -106,8 +106,7 @@ func initialInstalledModel() *installedModel {
 				m.isFinishedReadingLines = true
 
 				if !m.searchInput.Focused() && len(m.visiblePackageLines) > 0 {
-					name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[0]], "\n")
-					m.cmds = append(m.cmds, cmd.GetPackageInfo(name))
+					m.cmds = append(m.cmds, m.getPackageInfo())
 				}
 				return nil
 			},
@@ -316,32 +315,6 @@ func (m *installedModel) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, leftCol, infoViewport)
 }
 
-func (m *installedModel) upgradeAll() tea.Cmd {
-	if m.searchInput.Focused() {
-		return nil
-	}
-
-	return cmd.UpgradeAll()
-}
-
-func (m *installedModel) upgradeSelected() tea.Cmd {
-	if m.searchInput.Focused() {
-		return nil
-	}
-
-	selectedLine := m.packageLines[m.visiblePackageLines[m.listCursor]]
-	return cmd.UpgradeSelected(selectedLine)
-}
-
-func (m *installedModel) removeSelected() tea.Cmd {
-	if m.searchInput.Focused() {
-		return nil
-	}
-
-	selectedLine := m.packageLines[m.visiblePackageLines[m.listCursor]]
-	return cmd.RemoveSelected(selectedLine)
-}
-
 func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 	if m.searchInput.Focused() {
 		return nil
@@ -351,7 +324,7 @@ func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 	m.isFilteringExplicitInstall = isFiltering
 
 	if isFiltering {
-		return cmd.GetExplicitlyInstalledPackages()
+		return m.getInstalledPackages()
 	} else {
 		return m.getInstalledPackages()
 	}
@@ -437,20 +410,64 @@ func (m *installedModel) getInstalledPackages() tea.Cmd {
 		return nil
 	}
 
-	return cmd.NewCommand().
-		WithOperation("Q").
-		WithOptions("q").
-		WithTarget(cmd.PackageList).
-		Run()
+	cmd := cmd.NewCommand().
+		Operation("Q").
+		Options("q").
+		Target(cmd.PackageList)
+
+	if m.isFilteringExplicitInstall {
+		cmd.Options("e")
+	}
+
+	return cmd.Run()
 }
 
 func (m *installedModel) getPackageInfo() tea.Cmd {
-	selectedPackage := m.packageLines[m.visiblePackageLines[m.listCursor]]
+	selectedPackage := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
 
 	return cmd.NewCommand().
-		WithOperation("Q").
-		WithOptions("i").
-		WithArguments(selectedPackage).
-		WithTarget(cmd.PackageInfo).
+		Operation("Q").
+		Options("i").
+		Arguments(selectedPackage).
+		Target(cmd.PackageInfo).
+		Run()
+}
+
+func (m *installedModel) upgradeAll() tea.Cmd {
+	if m.searchInput.Focused() {
+		return nil
+	}
+
+	return cmd.NewCommand().
+		Operation("S").
+		Options("y", "u").
+		Arguments("--noconfirm").
+		Target(cmd.Background).
+		Run()
+}
+
+func (m *installedModel) upgradeSelected() tea.Cmd {
+	if m.searchInput.Focused() {
+		return nil
+	}
+
+	name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
+	return cmd.NewCommand().
+		Operation("S").
+		Options("y", "u").
+		Arguments(name, "--noconfirm").
+		Run()
+}
+
+func (m *installedModel) removeSelected() tea.Cmd {
+	if m.searchInput.Focused() {
+		return nil
+	}
+
+	name := strings.TrimSuffix(m.packageLines[m.visiblePackageLines[m.listCursor]], "\n")
+	return cmd.NewCommand().
+		Operation("R").
+		Options("s").
+		Arguments(name, "--noconfirm").
 		Run()
 }

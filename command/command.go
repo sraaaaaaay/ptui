@@ -54,34 +54,26 @@ type Command struct {
 
 var mutex sync.Mutex
 
-func tryGetDbLock() bool {
-	if _, err := os.Stat("/var/lib/pacman/db.lck"); errors.Is(err, os.ErrNotExist) {
-		return true
-	} else {
-		return false
-	}
-}
-
 func NewCommand() *Command {
 	return &Command{}
 }
 
-func (c *Command) WithOperation(op string) *Command {
+func (c *Command) Operation(op string) *Command {
 	c.operation = "-" + op
 	return c
 }
 
-func (c *Command) WithOptions(opts ...string) *Command {
+func (c *Command) Options(opts ...string) *Command {
 	c.options = append(c.options, opts...)
 	return c
 }
 
-func (c *Command) WithArguments(args ...string) *Command {
+func (c *Command) Arguments(args ...string) *Command {
 	c.args = append(c.args, args...)
 	return c
 }
 
-func (c *Command) WithTarget(target StreamTarget) *Command {
+func (c *Command) Target(target StreamTarget) *Command {
 	c.target = target
 	return c
 }
@@ -92,32 +84,7 @@ func (c *Command) Run() tea.Cmd {
 	allArgs = append(allArgs, mainOp)
 	allArgs = append(allArgs, c.args...)
 
-	return startCommand(allArgs, c.target, true)
-}
-
-func GetExplicitlyInstalledPackages() tea.Cmd {
-	cmd := []string{"Qqe", "--noconfirm"}
-	return startCommand(cmd, PackageList, true)
-}
-
-func GetPackageInfo(name string) tea.Cmd {
-	cmd := []string{"-Qi", name, "--noconfirm"}
-	return startCommand(cmd, PackageInfo, false)
-}
-
-func UpgradeAll() tea.Cmd {
-	cmd := []string{"-Syu", "--noconfirm"}
-	return startCommand(cmd, Background, true)
-}
-
-func UpgradeSelected(name string) tea.Cmd {
-	cmd := []string{"-Syu", name, "--noconfirm"}
-	return startCommand(cmd, Background, true)
-}
-
-func RemoveSelected(name string) tea.Cmd {
-	cmd := []string{"-Rs", strings.TrimSuffix(name, "\n"), "--noconfirm"}
-	return startCommand(cmd, Background, true)
+	return startCommand(allArgs, c.target, false)
 }
 
 var nextId atomic.Int32
@@ -187,6 +154,14 @@ func startCommand(args []string, target StreamTarget, isLongRunning bool) tea.Cm
 
 		return CommandStartMsg{CommandId: id, Target: target, Command: cmd, IsLongRunning: isLongRunning}
 
+	}
+}
+
+func tryGetDbLock() bool {
+	if _, err := os.Stat("/var/lib/pacman/db.lck"); errors.Is(err, os.ErrNotExist) {
+		return true
+	} else {
+		return false
 	}
 }
 
