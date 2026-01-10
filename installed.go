@@ -346,8 +346,15 @@ func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
 			),
 		)
 	}
+	listStr := list.String()
 
-	m.hotkeyViewport.SetContent(list.String())
+	cutoffY := m.listViewport.YOffset + m.listViewport.VisibleLineCount() - lipgloss.Height(listStr)
+	if m.listCursor > cutoffY {
+		diff := m.listCursor - cutoffY
+		m.listViewport.ScrollDown(diff)
+	}
+
+	m.hotkeyViewport.SetContent(listStr)
 	return nil
 }
 
@@ -390,7 +397,14 @@ func (m *installedModel) buildPackageList() {
 
 func (m *installedModel) buildInfoList() {
 	var builder strings.Builder
+	spacer := "\n" + strings.Repeat(" ", 18)
+
 	for _, line := range m.infoLines {
+		step := m.infoViewport.Width
+		if len(line) > step {
+			line = line[:step] + spacer + line[step:]
+		}
+
 		builder.WriteString(line)
 	}
 

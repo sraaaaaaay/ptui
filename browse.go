@@ -111,9 +111,10 @@ func initialBrowseModel() *browseModel {
 		},
 	}
 
-	model.createHotkey("/", "/", "Toggle Search", model.toggleSearch)
-	model.createHotkey("enter", "Enter", "View Details", model.viewDetails)
+	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
+	model.createHotkey("I", "I", "View Details", model.viewDetails)
 	model.createHotkey("esc", "Esc", "Close Details", model.closeDetails)
+	model.createHotkey("backspace", "Backspace", "Close Details", model.closeDetails)
 
 	return &model
 }
