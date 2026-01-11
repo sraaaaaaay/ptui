@@ -4,6 +4,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type StatusProvider interface {
+	StatusBar() string
+}
+
+type ChildModel interface {
+	tea.Model
+	StatusProvider
+}
+
 type MessageRouter[T tea.Model, M tea.Msg] map[StreamTarget]func(T, M) tea.Cmd
 type StreamTarget uint8
 

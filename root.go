@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 type rootModel struct {
 	selectedTab int
 
-	tabs    []tea.Model
+	tabs    []types.ChildModel
 	spinner spinner.Model
 
 	isExecutingCommand   bool
@@ -64,7 +63,7 @@ func initialModel() rootModel {
 
 	return rootModel{
 		selectedTab: 0,
-		tabs:        []tea.Model{installedTab, browseTab},
+		tabs:        []types.ChildModel{installedTab, browseTab},
 		spinner:     spinner,
 		cmds:        make([]tea.Cmd, 0, 6),
 	}
@@ -94,10 +93,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			updated, cmd := tab.Update(
 				types.ContentRectMsg{
 					Width:  msg.Width - 3*BORDER_WIDTH,
-					Height: msg.Height - 16},
+					Height: msg.Height - 17},
 			)
 
-			m.tabs[i] = updated
+			m.tabs[i] = updated.(types.ChildModel)
 			if cmd != nil {
 				m.cmds = append(m.cmds, cmd)
 			}
@@ -140,7 +139,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	updated, cmd := m.tabs[m.selectedTab].Update(msg)
-	m.tabs[m.selectedTab] = updated
+	m.tabs[m.selectedTab] = updated.(types.ChildModel)
 	if cmd != nil {
 		m.cmds = append(m.cmds, cmd)
 	}
@@ -152,7 +151,7 @@ func (m rootModel) View() string {
 	totalWidth := m.termWidth - BORDER_WIDTH
 	titlePanel := panelStyle.Render(lipgloss.Place(
 		totalWidth,
-		lipgloss.Height(header)-BORDER_WIDTH,
+		lipgloss.Height(header)-BORDER_WIDTH-1,
 		lipgloss.Center,
 		lipgloss.Center,
 		header,
@@ -162,20 +161,13 @@ func (m rootModel) View() string {
 	browseTab := renderTab(m, "Browse", 1)
 
 	tabPanel := windowStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, installedTab, browseTab))
-	if m.isExecutingCommand {
-		var text string
-		if m.executingCommandName == "" {
-			text = "Loading..."
-		} else {
-			text = fmt.Sprintf("Executing '%s'...", m.executingCommandName)
-		}
-
-		loader := tabStyle.Border(lipgloss.HiddenBorder()).Render(lipgloss.JoinHorizontal(lipgloss.Left, text, m.spinner.View()))
-		tabPanel = lipgloss.JoinHorizontal(lipgloss.Left, tabPanel, loader)
-	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left, titlePanel, tabPanel)
-	tabView := panelStyle.Render(lipgloss.PlaceHorizontal(totalWidth, lipgloss.Left, m.tabs[m.selectedTab].View()))
+	tabView := lipgloss.PlaceHorizontal(totalWidth, lipgloss.Left, m.tabs[m.selectedTab].View())
+
+	statusBar := m.tabs[m.selectedTab].StatusBar()
+
+	tabView = panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, tabView, statusBar))
 	view = lipgloss.JoinVertical(lipgloss.Center, view, tabView)
 
 	return windowStyle.Width(m.termWidth).Height(m.termHeight).Render(view)

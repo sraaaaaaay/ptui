@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/davecgh/go-spew/spew"
 )
 
 const NUM_COLUMNS = 2
@@ -257,17 +256,9 @@ func (m *installedModel) View() string {
 		return "Initialising..."
 	}
 
-	var viewMode string
-	if m.isFilteringExplicitInstall {
-		viewMode = "Explicit"
-	} else {
-		viewMode = "All"
-	}
-
-	counterText := reducedEmphasisStyle.Render(fmt.Sprintf("%d / %d (%s)", m.listCursor+1, len(m.visiblePackageLines), viewMode))
 	listViewport := m.listViewport.View()
 
-	topRow := lipgloss.PlaceHorizontal(m.listViewport.Width-2, lipgloss.Right, counterText)
+	var topRow string
 	if m.searchInput.Focused() {
 		topRow = defaultStyle.Render(m.searchInput.View())
 		listViewport = reducedEmphasisStyle.Render(listViewport)
@@ -296,6 +287,25 @@ func (m *installedModel) View() string {
 	infoViewport := panelStyle.Render(m.infoViewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Left, leftCol, infoViewport)
+}
+
+func (m *installedModel) StatusBar() string {
+	var viewMode string
+	if m.isFilteringExplicitInstall {
+		viewMode = "Explicit"
+	} else {
+		viewMode = "All"
+	}
+
+	counterText := fmt.Sprintf(" %d / %d", m.listCursor+1, len(m.visiblePackageLines))
+
+	listPanelEdge := m.listViewport.Width - len(counterText) + 2
+	viewMode = lipgloss.PlaceHorizontal(listPanelEdge, lipgloss.Right, viewMode)
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		counterText,
+		viewMode)
 }
 
 func (m *installedModel) toggleExplicitFilter() tea.Cmd {

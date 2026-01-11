@@ -222,12 +222,6 @@ func (m *browseModel) View() (final string) {
 	var topRow string
 	if m.searchInput.Focused() {
 		topRow = m.searchInput.View()
-	} else {
-		topRow = lipgloss.PlaceHorizontal(
-			m.listViewport.Width-2,
-			lipgloss.Right,
-			reducedEmphasisStyle.Render(
-				fmt.Sprintf("%d / %d", m.searchResultCursor+1, len(m.visibleSearchResultLines))))
 	}
 
 	var viewport string
@@ -253,6 +247,14 @@ func (m *browseModel) View() (final string) {
 	final = lipgloss.JoinVertical(lipgloss.Left, topRow, mainPanel)
 
 	return final
+}
+
+func (m *browseModel) StatusBar() string {
+	counterText := fmt.Sprintf("%d / %d", m.searchResultCursor+1, len(m.visibleSearchResultLines))
+	return defaultStyle.
+		Width(m.listViewport.Width + 4).
+		Background(darkGrey).
+		Render(counterText)
 }
 
 func (m *browseModel) toggleSearch() tea.Cmd {

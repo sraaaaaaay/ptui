@@ -10,6 +10,7 @@ var (
 	darkBlue  = lipgloss.Color("#1919A6")
 	lightBlue = lipgloss.Color("#2121DE")
 	yellow    = lipgloss.Color("#FFFF00")
+	darkGrey  = lipgloss.Color("#333333")
 
 	defaultStyle = lipgloss.NewStyle()
 	windowStyle  = lipgloss.NewStyle()
