@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/davecgh/go-spew/spew"
 )
 
 const NUM_COLUMNS = 2
@@ -302,14 +303,9 @@ func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 		return nil
 	}
 
-	isFiltering := !m.isFilteringExplicitInstall
-	m.isFilteringExplicitInstall = isFiltering
+	m.isFilteringExplicitInstall = !m.isFilteringExplicitInstall
 
-	if isFiltering {
-		return m.getInstalledPackages()
-	} else {
-		return m.getInstalledPackages()
-	}
+	return m.getInstalledPackages()
 }
 
 func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
@@ -436,6 +432,7 @@ func (m *installedModel) upgradeAll() tea.Cmd {
 		Options("y", "u").
 		Arguments("--noconfirm").
 		Target(Background).
+		Callback(m.getInstalledPackages).
 		Run()
 }
 

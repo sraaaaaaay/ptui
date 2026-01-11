@@ -38,10 +38,11 @@ type CommandDoneMsg struct {
 }
 
 type Command struct {
-	operation string
-	options   []string
-	args      []string
-	target    types.StreamTarget
+	operation    string
+	options      []string
+	args         []string
+	doneCallback func() tea.Cmd
+	target       types.StreamTarget
 }
 
 var mutex sync.Mutex
@@ -70,18 +71,23 @@ func (c *Command) Target(target types.StreamTarget) *Command {
 	return c
 }
 
+func (c *Command) Callback(cb func() tea.Cmd) *Command {
+	c.doneCallback = cb
+	return c
+}
+
 func (c *Command) Run() tea.Cmd {
 	var allArgs []string
 	mainOp := c.operation + strings.Join(c.options, "")
 	allArgs = append(allArgs, mainOp)
 	allArgs = append(allArgs, c.args...)
 
-	return startCommand(allArgs, c.target, false)
+	return startCommand(allArgs, c.target, c.doneCallback, false)
 }
 
 var nextId atomic.Int32
 
-func startCommand(args []string, target types.StreamTarget, isLongRunning bool) tea.Cmd {
+func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd, isLongRunning bool) tea.Cmd {
 	id := (int)(nextId.Load())
 	nextId.Add(1)
 
@@ -141,6 +147,9 @@ func startCommand(args []string, target types.StreamTarget, isLongRunning bool) 
 
 		go func() {
 			pipes.Wait()
+			if cb != nil {
+				Program.Send(cb())
+			}
 			Program.Send(CommandDoneMsg{CommandId: id, Target: target, Err: cmd.Wait()})
 		}()
 

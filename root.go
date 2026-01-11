@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type rootModel struct {
@@ -72,12 +71,11 @@ func initialModel() rootModel {
 }
 
 func (m rootModel) Init() tea.Cmd {
-	return m.InitSelectedTab()
+	return tea.Batch(m.InitSelectedTab(), tea.SetWindowTitle(APP_NAME))
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
-	spew.Fdump(dump, msg)
 	m.cmds = m.cmds[:0]
 
 	switch msg := msg.(type) {
