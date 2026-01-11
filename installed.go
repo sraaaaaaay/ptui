@@ -233,12 +233,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.buildPackageList()
 					m.cmds = append(m.cmds, m.getPackageInfo())
-
-					if m.listCursor < m.listViewport.YOffset {
-						updated, cmd := m.listViewport.Update(msg)
-						m.listViewport = updated
-						m.cmds = append(m.cmds, cmd)
-					}
+					scrollIntoView(&m.listViewport, m.listCursor)
 				}
 
 			case "down", "j":
@@ -247,12 +242,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.buildPackageList()
 					m.cmds = append(m.cmds, m.getPackageInfo())
-
-					if m.listCursor >= m.listViewport.YOffset+m.listViewport.VisibleLineCount() {
-						updated, cmd := m.listViewport.Update(msg)
-						m.listViewport = updated
-						m.cmds = append(m.cmds, cmd)
-					}
+					scrollIntoView(&m.listViewport, m.listCursor)
 				}
 			}
 		}
@@ -322,7 +312,6 @@ func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 	}
 }
 
-// TODO make sure we scroll to the selected package if showing the hotkey panel obscured it
 func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
 	if m.searchInput.Focused() {
 		return nil
@@ -346,15 +335,10 @@ func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
 			),
 		)
 	}
-	listStr := list.String()
 
-	cutoffY := m.listViewport.YOffset + m.listViewport.VisibleLineCount() - lipgloss.Height(listStr)
-	if m.listCursor > cutoffY {
-		diff := m.listCursor - cutoffY
-		m.listViewport.ScrollDown(diff)
-	}
+	m.hotkeyViewport.SetContent(list.String())
+	scrollIntoView(&m.listViewport, m.listCursor)
 
-	m.hotkeyViewport.SetContent(listStr)
 	return nil
 }
 

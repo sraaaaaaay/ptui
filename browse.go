@@ -202,23 +202,14 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.searchResultCursor > 0 {
 					m.searchResultCursor--
 					m.buildPackageList()
+					scrollIntoView(&m.listViewport, m.searchResultCursor)
 
-					if m.searchResultCursor < m.listViewport.YOffset {
-						updated, cmd := m.listViewport.Update(msg)
-						m.listViewport = updated
-						m.cmds = append(m.cmds, cmd)
-					}
 				}
 			case "down", "j":
 				if m.searchResultCursor < (len(m.visibleSearchResultLines) - 1) {
 					m.searchResultCursor++
 					m.buildPackageList()
-
-					if m.searchResultCursor >= m.listViewport.YOffset+m.listViewport.VisibleLineCount() {
-						updated, cmd := m.listViewport.Update(msg)
-						m.listViewport = updated
-						m.cmds = append(m.cmds, cmd)
-					}
+					scrollIntoView(&m.listViewport, m.searchResultCursor)
 				}
 			}
 		}
@@ -244,6 +235,10 @@ func (m *browseModel) View() (final string) {
 		viewport = m.listViewport.View()
 	} else {
 		viewport = m.infoViewport.View()
+	}
+
+	if m.searchInput.Focused() {
+		viewport = reducedEmphasisStyle.Render(viewport)
 	}
 
 	scrollBarString := createScrollbar(

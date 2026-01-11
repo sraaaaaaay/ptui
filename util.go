@@ -3,6 +3,8 @@ package main
 import (
 	"math"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/viewport"
 )
 
 func createScrollbar(width int, pos int, listLength int, contentHeight int, listLoaded bool) string {
@@ -38,4 +40,15 @@ func matchesSearch(text string, search string) (match bool) {
 	}
 
 	return false
+}
+
+func scrollIntoView(vp *viewport.Model, i int) {
+	if i < vp.YOffset {
+		vp.SetYOffset(i)
+	}
+
+	end := vp.YOffset + vp.VisibleLineCount()
+	if i >= end-1 {
+		vp.ScrollDown(i - end + 1)
+	}
 }
