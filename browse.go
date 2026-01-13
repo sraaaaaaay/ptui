@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	cmd "ptui/command"
@@ -15,9 +17,10 @@ import (
 )
 
 type browseModel struct {
-	listViewport viewport.Model
-	infoViewport viewport.Model
-	searchInput  textinput.Model
+	listViewport   viewport.Model
+	infoViewport   viewport.Model
+	hotkeyViewport viewport.Model
+	searchInput    textinput.Model
 
 	searchResultLines        []string
 	visibleSearchResultLines []int
@@ -33,8 +36,10 @@ type browseModel struct {
 	hasViewportDimensions  bool
 	isFinishedReadingLines bool
 	isViewingList          bool
+	isViewingHotkeys       bool
 
-	hotkeys map[string]types.HotkeyBinding
+	hotkeys        map[string]types.HotkeyBinding
+	hotkeysOrdered []string
 
 	startRoutes types.MessageRouter[*browseModel, cmd.CommandStartMsg]
 	chunkRoutes types.MessageRouter[*browseModel, cmd.CommandChunkMsg]
@@ -50,6 +55,7 @@ func initialBrowseModel() *browseModel {
 		searchResultCursor: 0,
 		isViewingList:      true,
 		hotkeys:            make(map[string]types.HotkeyBinding),
+
 		startRoutes: types.MessageRouter[*browseModel, cmd.CommandStartMsg]{
 			SearchResultList: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.isFinishedReadingLines = false
@@ -111,16 +117,27 @@ func initialBrowseModel() *browseModel {
 		},
 	}
 
+	model.createHotkey("H", "H", "Toggle Hotkeys", model.ToggleHotkeys)
 	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
 	model.createHotkey("I", "I", "View Details", model.viewDetails)
 	model.createHotkey("esc", "Esc", "Close Details", model.closeDetails)
 	model.createHotkey("backspace", "Backspace", "Close Details", model.closeDetails)
 
+	slices.SortFunc(model.hotkeysOrdered, func(a, b string) int {
+		hotkeyA := model.hotkeys[a]
+		hotkeyB := model.hotkeys[b]
+
+		return cmp.Compare(hotkeyA.Description, hotkeyB.Description)
+	})
+
 	return &model
 }
 
 func (m *browseModel) createHotkey(key string, displayKey string, description string, action func() tea.Cmd) {
-	m.hotkeys[key] = types.HotkeyBinding{Shortcut: displayKey, Description: description, Command: action}
+	hotkey := types.HotkeyBinding{Shortcut: displayKey, Description: description, Command: action}
+
+	m.hotkeys[key] = hotkey
+	m.hotkeysOrdered = append(m.hotkeysOrdered, key)
 }
 
 func (m *browseModel) Init() tea.Cmd {
@@ -153,7 +170,6 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.ContentRectMsg:
-		cw := msg.Width
 		ch := msg.Height - 2
 		if m.hasViewportDimensions {
 			m.fullHeight = msg.Height
@@ -161,16 +177,20 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.listViewport.Height = ch
 			m.listViewport.Width = msg.Width
 
+			m.hotkeyViewport.Width = msg.Width
+			m.hotkeyViewport.Height = len(m.hotkeys)
+
 			m.infoViewport.Height = ch
 			m.infoViewport.Width = msg.Width
 
-			m.searchInput.Width = cw
+			m.searchInput.Width = msg.Width
 		} else {
 			m.listViewport = viewport.New(msg.Width, ch)
 			m.infoViewport = viewport.New(msg.Width, ch)
+			m.hotkeyViewport = viewport.New(msg.Width, len(m.hotkeys))
 
 			m.searchInput = textinput.New()
-			m.searchInput.Width = cw
+			m.searchInput.Width = msg.Width
 
 			m.hasViewportDimensions = true
 		}
@@ -235,7 +255,12 @@ func (m *browseModel) View() (final string) {
 		viewport = reducedEmphasisStyle.Render(viewport)
 	}
 
-	scrollBarString := createScrollbar(
+	var hotKeyPanel string
+	if m.isViewingHotkeys {
+		hotKeyPanel = panelStyle.Render(m.hotkeyViewport.View())
+	}
+
+	scrollbar := createScrollbar(
 		2,
 		m.searchResultCursor,
 		len(m.visibleSearchResultLines),
@@ -243,7 +268,9 @@ func (m *browseModel) View() (final string) {
 		m.isFinishedReadingLines,
 	)
 
-	mainPanel := lipgloss.JoinHorizontal(lipgloss.Left, viewport, scrollBarString)
+	mainPanel := lipgloss.JoinHorizontal(lipgloss.Left, viewport, scrollbar)
+	mainPanel = lipgloss.JoinVertical(lipgloss.Left, mainPanel, hotKeyPanel)
+
 	final = lipgloss.JoinVertical(lipgloss.Left, topRow, mainPanel)
 
 	return final
@@ -255,6 +282,24 @@ func (m *browseModel) StatusBar() string {
 		Width(m.listViewport.Width + 4).
 		Background(darkGrey).
 		Render(counterText)
+}
+
+func (m *browseModel) ToggleHotkeys() tea.Cmd {
+	if m.searchInput.Focused() {
+		return nil
+	}
+
+	m.isViewingHotkeys = !m.isViewingHotkeys
+	if m.isViewingHotkeys {
+		m.listViewport.Height = m.listViewport.Height - m.hotkeyViewport.Height
+	} else {
+		m.listViewport.Height += m.hotkeyViewport.Height
+	}
+
+	buildSortedHotkeyList(&m.hotkeyViewport, m.hotkeys, m.hotkeysOrdered)
+	scrollIntoView(&m.listViewport, m.searchResultCursor)
+
+	return nil
 }
 
 func (m *browseModel) toggleSearch() tea.Cmd {

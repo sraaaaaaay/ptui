@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	cmd "ptui/command"
@@ -40,7 +42,8 @@ type installedModel struct {
 
 	cmds []tea.Cmd
 
-	hotkeys map[string]types.HotkeyBinding
+	hotkeys        map[string]types.HotkeyBinding
+	hotkeysOrdered []string
 
 	startRoutes types.MessageRouter[*installedModel, cmd.CommandStartMsg]
 	chunkRoutes types.MessageRouter[*installedModel, cmd.CommandChunkMsg]
@@ -125,16 +128,24 @@ func initialInstalledModel() *installedModel {
 	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
 	model.createHotkey("A", "A", "Upgrade All", model.upgradeAll)
 	model.createHotkey("D", "D", "Remove Selected", model.removeSelected)
-	model.createHotkey("E", "E", "Show/Hide Explicitly Installed", model.toggleExplicitFilter)
-	model.createHotkey("H", "H", "Show/Hide Hotkeys", model.toggleHotkeyPanel)
+	model.createHotkey("E", "E", "Toggle Explicit", model.toggleExplicitFilter)
+	model.createHotkey("H", "H", "Toggle Hotkeys", model.toggleHotkeys)
 	model.createHotkey("R", "R", "Refresh List", model.getInstalledPackages)
 	model.createHotkey("U", "U", "Upgrade Selected", model.upgradeSelected)
+
+	slices.SortFunc(model.hotkeysOrdered, func(a, b string) int {
+		hotkeyA := model.hotkeys[a]
+		hotkeyB := model.hotkeys[b]
+
+		return cmp.Compare(hotkeyA.Description, hotkeyB.Description)
+	})
 
 	return &model
 }
 
 func (m *installedModel) createHotkey(key string, displayKey string, description string, action func() tea.Cmd) {
 	m.hotkeys[key] = types.HotkeyBinding{Shortcut: displayKey, Description: description, Command: action}
+	m.hotkeysOrdered = append(m.hotkeysOrdered, key)
 }
 
 func (m *installedModel) Init() tea.Cmd {
@@ -319,7 +330,7 @@ func (m *installedModel) toggleExplicitFilter() tea.Cmd {
 	return m.getInstalledPackages()
 }
 
-func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
+func (m *installedModel) toggleHotkeys() tea.Cmd {
 	if m.searchInput.Focused() {
 		return nil
 	}
@@ -331,19 +342,7 @@ func (m *installedModel) toggleHotkeyPanel() tea.Cmd {
 		m.listViewport.Height = m.fullHeight - 1
 	}
 
-	var list strings.Builder
-	for _, shortcut := range m.hotkeys {
-		list.WriteString(
-			fmt.Sprintf(
-				"%s%s%s\n",
-				hotkeyStyle.Render(shortcut.Shortcut),
-				strings.Repeat(" ", m.hotkeyViewport.Width-len(shortcut.Shortcut)-len(shortcut.Description)-1),
-				reducedEmphasisStyle.Render(shortcut.Description),
-			),
-		)
-	}
-
-	m.hotkeyViewport.SetContent(list.String())
+	buildSortedHotkeyList(&m.hotkeyViewport, m.hotkeys, m.hotkeysOrdered)
 	scrollIntoView(&m.listViewport, m.listCursor)
 
 	return nil
@@ -401,6 +400,8 @@ func (m *installedModel) buildInfoList() {
 	for _, line := range m.infoLines {
 		// Lipgloss's auto-wrapping destroys URLs for most terminals.
 		// Prefer to make the line hard-to-read than useless.
+
+		// TODO fix if a URL runs off the terminal, the unrendered characters are treated as junk anyway and can't be clicked.
 		if isUrl(line) {
 			builder.WriteString(line)
 			continue

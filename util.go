@@ -2,9 +2,11 @@ package main
 
 import (
 	"math"
+	"ptui/types"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func createScrollbar(width int, pos int, listLength int, contentHeight int, listLoaded bool) string {
@@ -51,6 +53,25 @@ func scrollIntoView(vp *viewport.Model, i int) {
 	if i >= end-1 {
 		vp.ScrollDown(i - end + 1)
 	}
+}
+
+func buildSortedHotkeyList(vp *viewport.Model, hotkeys map[string]types.HotkeyBinding, keysOrdered []string) {
+	var list strings.Builder
+	for _, key := range keysOrdered {
+		hotkey := hotkeys[key]
+
+		skWidth := lipgloss.Width(hotkey.Shortcut)
+		dWidth := lipgloss.Width(hotkey.Description)
+
+		paddingWidth := max(0, vp.Width-skWidth-dWidth-1)
+
+		list.WriteString(reducedEmphasisStyle.Render(hotkey.Description))
+		list.WriteString(strings.Repeat(" ", paddingWidth))
+		list.WriteString(hotkey.Shortcut)
+		list.WriteRune('\n')
+	}
+
+	vp.SetContent(list.String())
 }
 
 func isUrl(str string) bool {
