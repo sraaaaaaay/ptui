@@ -196,6 +196,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.infoViewport.Width = rw
 			m.infoViewport.Height = msg.Height
 
+			m.buildInfoList()
 		}
 
 	case tea.KeyMsg:
@@ -387,15 +388,36 @@ func (m *installedModel) buildPackageList() {
 
 func (m *installedModel) buildInfoList() {
 	var builder strings.Builder
-	spacer := "\n" + strings.Repeat(" ", 18)
+	maxWidth := m.infoViewport.Width
+
+	leftColWidth := 18
+	rightColWidth := maxWidth - leftColWidth
+	rightStyle := defaultStyle.Width(rightColWidth)
+
+	if rightColWidth <= 0 {
+		return
+	}
 
 	for _, line := range m.infoLines {
-		step := m.infoViewport.Width
-		if len(line) > step {
-			line = line[:step] + spacer + line[step:]
+		// Lipgloss's auto-wrapping destroys URLs for most terminals.
+		// Prefer to make the line hard-to-read than useless.
+		if isUrl(line) {
+			builder.WriteString(line)
+			continue
 		}
 
-		builder.WriteString(line)
+		halves := strings.Split(line, " : ")
+		if len(halves) != 2 {
+			builder.WriteString(line)
+			continue
+		}
+
+		key := halves[0]
+		value := strings.TrimSpace(halves[1])
+
+		valueRendered := rightStyle.Render(value)
+		row := lipgloss.JoinHorizontal(lipgloss.Top, key, valueRendered)
+		builder.WriteString(row + "\n")
 	}
 
 	m.infoViewport.SetContent(builder.String())

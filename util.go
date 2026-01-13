@@ -52,3 +52,7 @@ func scrollIntoView(vp *viewport.Model, i int) {
 		vp.ScrollDown(i - end + 1)
 	}
 }
+
+func isUrl(str string) bool {
+	return strings.Contains(str, "https") || strings.Contains(str, "http")
+}
