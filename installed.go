@@ -125,12 +125,11 @@ func initialInstalledModel() *installedModel {
 		},
 	}
 
-	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
+	model.createHotkey("/", "/", "Toggle Search", model.toggleSearch)
 	model.createHotkey("A", "A", "Upgrade All", model.upgradeAll)
-	model.createHotkey("D", "D", "Remove Selected", model.removeSelected)
+	model.createHotkey("R", "R", "Remove Selected", model.removeSelected)
 	model.createHotkey("E", "E", "Toggle Explicit", model.toggleExplicitFilter)
 	model.createHotkey("H", "H", "Toggle Hotkeys", model.toggleHotkeys)
-	model.createHotkey("R", "R", "Refresh List", model.getInstalledPackages)
 	model.createHotkey("U", "U", "Upgrade Selected", model.upgradeSelected)
 
 	slices.SortFunc(model.hotkeysOrdered, func(a, b string) int {
@@ -184,7 +183,7 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rw := msg.Width - lw - 1
 		if !m.hasViewportDimensions {
 			m.listViewport = viewport.New(lw, msg.Height-1)
-			m.hotkeyViewport = viewport.New(lw, len(m.hotkeys))
+			m.hotkeyViewport = viewport.New(lw+1, len(m.hotkeys))
 			m.infoViewport = viewport.New(rw, msg.Height)
 
 			m.searchInput = textinput.New()

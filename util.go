@@ -77,3 +77,12 @@ func buildSortedHotkeyList(vp *viewport.Model, hotkeys map[string]types.HotkeyBi
 func isUrl(str string) bool {
 	return strings.Contains(str, "https") || strings.Contains(str, "http")
 }
+
+func isLongRunning(t types.StreamTarget) bool {
+	switch t {
+	case Background:
+		return true
+	default:
+		return false
+	}
+}

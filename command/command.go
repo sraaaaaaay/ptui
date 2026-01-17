@@ -18,10 +18,8 @@ import (
 var Program *tea.Program
 
 type CommandStartMsg struct {
-	CommandId     int
-	Target        types.StreamTarget
-	Command       *exec.Cmd
-	IsLongRunning bool
+	CommandId int
+	Target    types.StreamTarget
 }
 
 type CommandChunkMsg struct {
@@ -77,17 +75,19 @@ func (c *Command) Callback(cb func() tea.Cmd) *Command {
 }
 
 func (c *Command) Run() tea.Cmd {
-	var allArgs []string
-	mainOp := c.operation + strings.Join(c.options, "")
-	allArgs = append(allArgs, mainOp)
-	allArgs = append(allArgs, c.args...)
+	var builtCommand []string
 
-	return startCommand(allArgs, c.target, c.doneCallback, false)
+	mainOp := c.operation + strings.Join(c.options, "")
+
+	builtCommand = append(builtCommand, mainOp)
+	builtCommand = append(builtCommand, c.args...)
+
+	return startCommand(builtCommand, c.target, c.doneCallback)
 }
 
 var nextId atomic.Int32
 
-func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd, isLongRunning bool) tea.Cmd {
+func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd) tea.Cmd {
 	id := (int)(nextId.Load())
 	nextId.Add(1)
 
@@ -113,6 +113,7 @@ func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd, i
 		}
 
 		cmd := exec.Command("pacman", args...)
+		Program.Println(args)
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -153,7 +154,7 @@ func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd, i
 			Program.Send(CommandDoneMsg{CommandId: id, Target: target, Err: cmd.Wait()})
 		}()
 
-		return CommandStartMsg{CommandId: id, Target: target, Command: cmd, IsLongRunning: isLongRunning}
+		return CommandStartMsg{CommandId: id, Target: target}
 
 	}
 }

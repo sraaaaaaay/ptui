@@ -57,7 +57,7 @@ func initialBrowseModel() *browseModel {
 		hotkeys:            make(map[string]types.HotkeyBinding),
 
 		startRoutes: types.MessageRouter[*browseModel, cmd.CommandStartMsg]{
-			SearchResultList: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
+			PackageList: func(m *browseModel, msg cmd.CommandStartMsg) tea.Cmd {
 				m.isFinishedReadingLines = false
 				m.listCmdId = msg.CommandId
 				m.searchResultLines = m.searchResultLines[:0]
@@ -73,7 +73,7 @@ func initialBrowseModel() *browseModel {
 			},
 		},
 		chunkRoutes: types.MessageRouter[*browseModel, cmd.CommandChunkMsg]{
-			SearchResultList: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
+			PackageList: func(m *browseModel, msg cmd.CommandChunkMsg) tea.Cmd {
 				if m.listCmdId != msg.CommandId {
 					return nil
 				}
@@ -93,7 +93,7 @@ func initialBrowseModel() *browseModel {
 			},
 		},
 		doneRoutes: types.MessageRouter[*browseModel, cmd.CommandDoneMsg]{
-			SearchResultList: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
+			PackageList: func(m *browseModel, msg cmd.CommandDoneMsg) tea.Cmd {
 				if m.listCmdId != msg.CommandId {
 					return nil
 				}
@@ -118,10 +118,10 @@ func initialBrowseModel() *browseModel {
 	}
 
 	model.createHotkey("H", "H", "Toggle Hotkeys", model.ToggleHotkeys)
-	model.createHotkey("enter", "Enter", "Toggle Search", model.toggleSearch)
+	model.createHotkey("/", "/", "Toggle Search", model.toggleSearch)
 	model.createHotkey("I", "I", "View Details", model.viewDetails)
-	model.createHotkey("esc", "Esc", "Close Details", model.closeDetails)
 	model.createHotkey("backspace", "Backspace", "Close Details", model.closeDetails)
+	model.createHotkey("enter", "Enter", "Install Selected", model.installSelected)
 
 	slices.SortFunc(model.hotkeysOrdered, func(a, b string) int {
 		hotkeyA := model.hotkeys[a]
@@ -280,7 +280,6 @@ func (m *browseModel) StatusBar() string {
 	counterText := fmt.Sprintf("%d / %d", m.searchResultCursor+1, len(m.visibleSearchResultLines))
 	return defaultStyle.
 		Width(m.listViewport.Width + 4).
-		Background(darkGrey).
 		Render(counterText)
 }
 
@@ -380,7 +379,21 @@ func (m *browseModel) searchPackageDatabase(text string) tea.Cmd {
 		Operation("S").
 		Options("s", "q").
 		Arguments(text, "--noconfirm").
-		Target(SearchResultList).
+		Target(PackageList).
+		Run()
+}
+
+func (m *browseModel) installSelected() tea.Cmd {
+	name, err := m.getSelectedPackageName()
+
+	if err != nil {
+		return nil
+	}
+
+	return cmd.NewCommand().
+		Operation("S").
+		Arguments(name, "--noconfirm").
+		Target(Background).
 		Run()
 }
 

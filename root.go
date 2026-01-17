@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"time"
 
 	cmd "ptui/command"
@@ -18,8 +17,7 @@ type rootModel struct {
 	tabs    []types.ChildModel
 	spinner spinner.Model
 
-	isExecutingCommand   bool
-	executingCommandName string
+	runningCommandsCount int
 
 	termWidth  int
 	termHeight int
@@ -32,7 +30,6 @@ const (
 	PackageList types.StreamTarget = iota
 	PackageInfo
 	Background
-	SearchResultList
 )
 
 var header = defaultStyle.Foreground(yellow).Render(`
@@ -43,9 +40,7 @@ var header = defaultStyle.Foreground(yellow).Render(`
  ██║         ██║    ╚██████╔╝ ██║
  ╚═╝         ╚═╝     ╚═════╝  ╚═╝`)
 
-var dump, _ = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-
-func initialModel() rootModel {
+func initialModel() *rootModel {
 	installedTab := initialInstalledModel()
 	browseTab := initialBrowseModel()
 
@@ -61,7 +56,7 @@ func initialModel() rootModel {
 				FPS: time.Second / 3,
 			}))
 
-	return rootModel{
+	return &rootModel{
 		selectedTab: 0,
 		tabs:        []types.ChildModel{installedTab, browseTab},
 		spinner:     spinner,
@@ -69,17 +64,17 @@ func initialModel() rootModel {
 	}
 }
 
-func (m rootModel) Init() tea.Cmd {
+func (m *rootModel) Init() tea.Cmd {
 	return tea.Batch(m.InitSelectedTab(), tea.SetWindowTitle(APP_NAME))
 }
 
-func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.cmds = m.cmds[:0]
 
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
-		if m.isExecutingCommand {
+		if m.runningCommandsCount > 0 {
 			updated, cmd := m.spinner.Update(msg)
 			m.spinner = updated
 			m.cmds = append(m.cmds, cmd)
@@ -103,20 +98,20 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.HotkeyPressedMsg:
-		m.executingCommandName = msg.Hotkey.Description
 		m.cmds = append(m.cmds, msg.Hotkey.Command())
 
 	case cmd.CommandStartMsg, cmd.CommandChunkMsg, cmd.CommandDoneMsg, installedInitMsg, browseInitMsg:
 		switch msg := msg.(type) {
 		case cmd.CommandStartMsg:
-			if msg.IsLongRunning {
-				m.isExecutingCommand = true
+			if isLongRunning(msg.Target) {
+				m.runningCommandsCount++
 				m.cmds = append(m.cmds, m.spinner.Tick)
 			}
 
 		case cmd.CommandDoneMsg:
-			m.isExecutingCommand = false
-			m.executingCommandName = ""
+			if isLongRunning(msg.Target) {
+				m.runningCommandsCount--
+			}
 		}
 
 	case tea.KeyMsg:
@@ -147,7 +142,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(m.cmds...)
 }
 
-func (m rootModel) View() string {
+func (m *rootModel) View() string {
 	totalWidth := m.termWidth - BORDER_WIDTH
 	titlePanel := panelStyle.Render(lipgloss.Place(
 		totalWidth,
@@ -166,6 +161,9 @@ func (m rootModel) View() string {
 	tabView := lipgloss.PlaceHorizontal(totalWidth, lipgloss.Left, m.tabs[m.selectedTab].View())
 
 	statusBar := m.tabs[m.selectedTab].StatusBar()
+	if m.runningCommandsCount > 0 {
+		statusBar = lipgloss.JoinHorizontal(lipgloss.Left, statusBar, m.spinner.View())
+	}
 
 	tabView = panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, tabView, statusBar))
 	view = lipgloss.JoinVertical(lipgloss.Center, view, tabView)
@@ -177,7 +175,7 @@ func (m *rootModel) InitSelectedTab() tea.Cmd {
 	return m.tabs[m.selectedTab].Init()
 }
 
-func renderTab(m rootModel, title string, index int) (result string) {
+func renderTab(m *rootModel, title string, index int) (result string) {
 	if m.selectedTab == index {
 		result = selectedTabStyle.Render(title)
 	} else {
