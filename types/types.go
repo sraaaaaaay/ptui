@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -28,4 +29,11 @@ type HotkeyBinding struct {
 
 type HotkeyPressedMsg struct {
 	Hotkey HotkeyBinding
+}
+
+type PackageListModel interface {
+	SearchInput() *textinput.Model
+	Hotkeys() map[string]HotkeyBinding
+	AddCommand(tea.Cmd)
+	ResetCursor()
 }

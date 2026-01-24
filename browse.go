@@ -195,42 +195,21 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hasViewportDimensions = true
 		}
 	case tea.KeyMsg:
-		hotkey, exists := m.hotkeys[msg.String()]
+		handleHotkeyAndSearch(m, msg)
 
-		if exists {
-			m.cmds = append(m.cmds, func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: hotkey} })
-		}
-
-		if msg.String() != "/" && m.searchInput.Focused() {
-			oldVal := m.searchInput.Value()
-			updated, cmd := m.searchInput.Update(msg)
-			newVal := updated.Value()
-
-			m.searchInput = updated
-			if cmd != nil {
-				m.cmds = append(m.cmds, cmd)
-			}
-
-			if oldVal != newVal {
-				m.searchResultCursor = 0
+		switch msg.String() {
+		case "up", "k":
+			if m.searchResultCursor > 0 {
+				m.searchResultCursor--
 				m.buildPackageList()
+				scrollIntoView(&m.listViewport, m.searchResultCursor)
+
 			}
-
-		} else {
-			switch msg.String() {
-			case "up", "k":
-				if m.searchResultCursor > 0 {
-					m.searchResultCursor--
-					m.buildPackageList()
-					scrollIntoView(&m.listViewport, m.searchResultCursor)
-
-				}
-			case "down", "j":
-				if m.searchResultCursor < (len(m.visibleSearchResultLines) - 1) {
-					m.searchResultCursor++
-					m.buildPackageList()
-					scrollIntoView(&m.listViewport, m.searchResultCursor)
-				}
+		case "down", "j":
+			if m.searchResultCursor < (len(m.visibleSearchResultLines) - 1) {
+				m.searchResultCursor++
+				m.buildPackageList()
+				scrollIntoView(&m.listViewport, m.searchResultCursor)
 			}
 		}
 	}
@@ -278,9 +257,7 @@ func (m *browseModel) View() (final string) {
 
 func (m *browseModel) StatusBar() string {
 	counterText := fmt.Sprintf("%d / %d", m.searchResultCursor+1, len(m.visibleSearchResultLines))
-	return defaultStyle.
-		Width(m.listViewport.Width + 4).
-		Render(counterText)
+	return counterText
 }
 
 func (m *browseModel) ToggleHotkeys() tea.Cmd {
@@ -371,7 +348,26 @@ func (m *browseModel) viewDetails() tea.Cmd {
 
 func (m *browseModel) closeDetails() tea.Cmd {
 	m.isViewingList = true
+	m.infoViewport.SetContent("")
+
 	return nil
+}
+
+func (m *browseModel) Hotkeys() map[string]types.HotkeyBinding {
+	return m.hotkeys
+}
+
+func (m *browseModel) SearchInput() *textinput.Model {
+	return &m.searchInput
+}
+
+func (m *browseModel) AddCommand(cmd tea.Cmd) {
+	m.cmds = append(m.cmds, cmd)
+}
+
+func (m *browseModel) ResetCursor() {
+	m.searchResultCursor = 0
+	m.buildPackageList()
 }
 
 func (m *browseModel) searchPackageDatabase(text string) tea.Cmd {

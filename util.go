@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -72,6 +73,47 @@ func buildSortedHotkeyList(vp *viewport.Model, hotkeys map[string]types.HotkeyBi
 	}
 
 	vp.SetContent(list.String())
+}
+
+func handleHotkeyAndSearch(m types.PackageListModel, msg tea.KeyMsg) {
+	msgConsumed := false
+	msgStr := msg.String()
+
+	hotkeys := m.Hotkeys()
+	searchInput := m.SearchInput()
+
+	// In specific cases, "global" hotkeys should be consumed by the program
+	// rather than passed to the text input. If hotkeys are ever made configurable
+	// there'll need to be a way to resolve which one toggles the search.
+	if msgStr == "/" {
+		if hotkey, exists := hotkeys[msgStr]; exists {
+			m.AddCommand(func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: hotkey} })
+			msgConsumed = true
+		}
+	}
+
+	if !msgConsumed && searchInput.Focused() {
+		oldVal := searchInput.Value()
+		updated, cmd := searchInput.Update(msg)
+		newVal := updated.Value()
+
+		*searchInput = updated
+		if cmd != nil {
+			m.AddCommand(cmd)
+		}
+
+		if oldVal != newVal {
+			m.ResetCursor()
+		}
+		msgConsumed = true
+	}
+
+	if !msgConsumed {
+		hotkey, exists := hotkeys[msgStr]
+		if exists {
+			m.AddCommand(func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: hotkey} })
+		}
+	}
 }
 
 func isUrl(str string) bool {

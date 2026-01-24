@@ -1,4 +1,4 @@
-package main
+ package main
 
 import (
 	"cmp"
@@ -179,11 +179,13 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case types.ContentRectMsg:
 		m.fullHeight = msg.Height
+
 		lw := int(float32(msg.Width) * float32(0.4))
 		rw := msg.Width - lw - 1
 		if !m.hasViewportDimensions {
 			m.listViewport = viewport.New(lw, msg.Height-1)
 			m.hotkeyViewport = viewport.New(lw+1, len(m.hotkeys))
+			
 			m.infoViewport = viewport.New(rw, msg.Height)
 
 			m.searchInput = textinput.New()
@@ -210,51 +212,25 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		val, hotkeyExists := m.hotkeys[msg.String()]
-		if hotkeyExists {
-			m.cmds = append(m.cmds, func() tea.Msg { return types.HotkeyPressedMsg{Hotkey: val} })
-		}
+		handleHotkeyAndSearch(m, msg)
 
-		if m.searchInput.Focused() {
-			oldVal := m.searchInput.Value()
-			updated, cmd := m.searchInput.Update(msg)
-			newVal := updated.Value()
+		switch msg.String() {
+		case "up", "k":
+			if m.listCursor > 0 {
+				m.listCursor--
 
-			m.searchInput = updated
-			if cmd != nil {
-				m.cmds = append(m.cmds, cmd)
-			}
-
-			if oldVal != newVal {
-				m.listCursor = 0
 				m.buildPackageList()
-
-				if len(m.visiblePackageLines) > 0 {
-					m.cmds = append(m.cmds, m.getPackageInfo())
-				} else {
-					m.infoLines = m.infoLines[:0]
-					m.infoViewport.SetContent("")
-				}
+				m.cmds = append(m.cmds, m.getPackageInfo())
+				scrollIntoView(&m.listViewport, m.listCursor)
 			}
-		} else {
-			switch msg.String() {
-			case "up", "k":
-				if m.listCursor > 0 {
-					m.listCursor--
 
-					m.buildPackageList()
-					m.cmds = append(m.cmds, m.getPackageInfo())
-					scrollIntoView(&m.listViewport, m.listCursor)
-				}
+		case "down", "j":
+			if m.listCursor < (len(m.visiblePackageLines) - 1) {
+				m.listCursor++
 
-			case "down", "j":
-				if m.listCursor < (len(m.visiblePackageLines) - 1) {
-					m.listCursor++
-
-					m.buildPackageList()
-					m.cmds = append(m.cmds, m.getPackageInfo())
-					scrollIntoView(&m.listViewport, m.listCursor)
-				}
+				m.buildPackageList()
+				m.cmds = append(m.cmds, m.getPackageInfo())
+				scrollIntoView(&m.listViewport, m.listCursor)
 			}
 		}
 	}
@@ -400,7 +376,6 @@ func (m *installedModel) buildInfoList() {
 		// Lipgloss's auto-wrapping destroys URLs for most terminals.
 		// Prefer to make the line hard-to-read than useless.
 
-		// TODO fix if a URL runs off the terminal, the unrendered characters are treated as junk anyway and can't be clicked.
 		if isUrl(line) {
 			builder.WriteString(line)
 			continue
@@ -421,6 +396,30 @@ func (m *installedModel) buildInfoList() {
 	}
 
 	m.infoViewport.SetContent(builder.String())
+}
+
+func (m *installedModel) Hotkeys() map[string]types.HotkeyBinding {
+	return m.hotkeys
+}
+
+func (m *installedModel) SearchInput() *textinput.Model {
+	return &m.searchInput
+}
+
+func (m *installedModel) AddCommand(cmd tea.Cmd) {
+	m.cmds = append(m.cmds, cmd)
+}
+
+func (m *installedModel) ResetCursor() {
+	m.listCursor = 0
+	m.buildPackageList()
+
+	if len(m.visiblePackageLines) > 0 {
+		m.cmds = append(m.cmds, m.getPackageInfo())
+	} else {
+		m.infoLines = m.infoLines[:0]
+		m.infoViewport.SetContent("")
+	}
 }
 
 func (m *installedModel) getInstalledPackages() tea.Cmd {
