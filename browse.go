@@ -17,6 +17,8 @@ import (
 )
 
 type browseModel struct {
+	title string
+
 	listViewport   viewport.Model
 	infoViewport   viewport.Model
 	hotkeyViewport viewport.Model
@@ -52,6 +54,7 @@ type browseInitMsg struct{}
 
 func initialBrowseModel() *browseModel {
 	model := browseModel{
+		title:              "Browse",
 		searchResultCursor: 0,
 		isViewingList:      true,
 		hotkeys:            make(map[string]types.HotkeyBinding),
@@ -170,23 +173,27 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.ContentRectMsg:
-		ch := msg.Height - 2
+		// The root model determines the height for the tab panel, but
+		// the internal layout of the tab affects width usage via borders
+		// and margins.
+		msg.Width -= 4
+
 		if m.hasViewportDimensions {
 			m.fullHeight = msg.Height
 
-			m.listViewport.Height = ch
+			m.listViewport.Height = msg.Height
 			m.listViewport.Width = msg.Width
 
 			m.hotkeyViewport.Width = msg.Width
 			m.hotkeyViewport.Height = len(m.hotkeys)
 
-			m.infoViewport.Height = ch
+			m.infoViewport.Height = msg.Height
 			m.infoViewport.Width = msg.Width
 
 			m.searchInput.Width = msg.Width
 		} else {
-			m.listViewport = viewport.New(msg.Width, ch)
-			m.infoViewport = viewport.New(msg.Width, ch)
+			m.listViewport = viewport.New(msg.Width, msg.Height)
+			m.infoViewport = viewport.New(msg.Width, msg.Height)
 			m.hotkeyViewport = viewport.New(msg.Width, len(m.hotkeys))
 
 			m.searchInput = textinput.New()
@@ -218,20 +225,20 @@ func (m *browseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *browseModel) View() (final string) {
-	var topRow string
+	var packageListTopRow string
 	if m.searchInput.Focused() {
-		topRow = m.searchInput.View()
+		packageListTopRow = m.searchInput.View()
 	}
 
-	var viewport string
+	var activeViewport string
 	if m.isViewingList {
-		viewport = m.listViewport.View()
+		activeViewport = m.listViewport.View()
 	} else {
-		viewport = m.infoViewport.View()
+		activeViewport = m.infoViewport.View()
 	}
 
 	if m.searchInput.Focused() {
-		viewport = reducedEmphasisStyle.Render(viewport)
+		activeViewport = reducedEmphasisStyle.Render(activeViewport)
 	}
 
 	var hotKeyPanel string
@@ -243,21 +250,26 @@ func (m *browseModel) View() (final string) {
 		2,
 		m.searchResultCursor,
 		len(m.visibleSearchResultLines),
-		lipgloss.Height(viewport),
+		lipgloss.Height(activeViewport),
 		m.isFinishedReadingLines,
 	)
 
-	mainPanel := lipgloss.JoinHorizontal(lipgloss.Left, viewport, scrollbar)
+	mainPanel := lipgloss.JoinHorizontal(lipgloss.Left, activeViewport, scrollbar)
 	mainPanel = lipgloss.JoinVertical(lipgloss.Left, mainPanel, hotKeyPanel)
+	mainPanel = lipgloss.JoinVertical(lipgloss.Left, packageListTopRow, mainPanel)
 
-	final = lipgloss.JoinVertical(lipgloss.Left, topRow, mainPanel)
+	var cursorPositionText string
+	if len(m.visibleSearchResultLines) > 0 {
+		cursorPositionText = fmt.Sprintf(" %d of %d ", m.searchResultCursor+1, len(m.visibleSearchResultLines))
+	} else {
+		cursorPositionText = " No results "
+	}
 
-	return final
+	return createCustomBottomBorder(mainPanel, cursorPositionText, false)
 }
 
-func (m *browseModel) StatusBar() string {
-	counterText := fmt.Sprintf("%d / %d", m.searchResultCursor+1, len(m.visibleSearchResultLines))
-	return counterText
+func (m *browseModel) Title() string {
+	return m.title
 }
 
 func (m *browseModel) ToggleHotkeys() tea.Cmd {

@@ -1,9 +1,10 @@
- package main
+package main
 
 import (
 	"cmp"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -21,6 +22,8 @@ const NUM_COLUMNS = 2
 type installedInitMsg struct{} // Indicate tab setup I/O
 
 type installedModel struct {
+	title string
+
 	hotkeyViewport viewport.Model
 	listViewport   viewport.Model
 	infoViewport   viewport.Model
@@ -52,6 +55,7 @@ type installedModel struct {
 
 func initialInstalledModel() *installedModel {
 	model := installedModel{
+		title:               "Installed",
 		packageLines:        make([]string, 0, 2048),
 		visiblePackageLines: make([]int, 0, 2048),
 		infoLines:           make([]string, 0, 100),
@@ -178,18 +182,22 @@ func (m *installedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.ContentRectMsg:
+		// The root model determines the height for the tab panel, but
+		// the internal layout of the tab affects width usage via borders
+		// and margins.
 		m.fullHeight = msg.Height
+		msg.Width -= 5
 
-		lw := int(float32(msg.Width) * float32(0.4))
-		rw := msg.Width - lw - 1
+		lw := int(math.Ceil(float64(msg.Width) * float64(0.4)))
+		rw := msg.Width - lw
 		if !m.hasViewportDimensions {
 			m.listViewport = viewport.New(lw, msg.Height-1)
 			m.hotkeyViewport = viewport.New(lw+1, len(m.hotkeys))
-			
-			m.infoViewport = viewport.New(rw, msg.Height)
+
+			m.infoViewport = viewport.New(rw, msg.Height+1)
 
 			m.searchInput = textinput.New()
-			m.searchInput.Width = lw - 4 // Subtract cursor and a space
+			m.searchInput.Width = lw
 
 			m.hasViewportDimensions = true
 		} else {
@@ -243,56 +251,56 @@ func (m *installedModel) View() string {
 		return "Initialising..."
 	}
 
-	listViewport := m.listViewport.View()
+	packageListViewport := m.listViewport.View()
 
-	var topRow string
+	var packageListTopRow string
 	if m.searchInput.Focused() {
-		topRow = defaultStyle.Render(m.searchInput.View())
-		listViewport = reducedEmphasisStyle.Render(listViewport)
+		packageListTopRow = defaultStyle.Render(m.searchInput.View())
+		packageListViewport = reducedEmphasisStyle.Render(packageListViewport)
 	}
 
-	scrollBarString := createScrollbar(
+	packageListScrollbar := createScrollbar(
 		1,
 		m.listCursor,
 		len(m.visiblePackageLines),
-		lipgloss.Height(listViewport),
+		lipgloss.Height(packageListViewport),
 		m.isFinishedReadingLines,
 	)
 
-	listViewport = lipgloss.JoinHorizontal(lipgloss.Left, listViewport, scrollBarString)
-	listPanel := lipgloss.JoinVertical(lipgloss.Left, topRow, listViewport)
+	packageListViewport = lipgloss.JoinHorizontal(lipgloss.Left, packageListViewport, packageListScrollbar)
+	packageListPanel := lipgloss.JoinVertical(lipgloss.Left, packageListTopRow, packageListViewport)
 
-	leftCol := panelStyle.Render(listPanel)
+	var filterMode string
+	if m.isFilteringExplicitInstall {
+		filterMode = "Explicit"
+	} else {
+		filterMode = "All"
+	}
+
+	var cursorPositionText string
+	if len(m.visiblePackageLines) > 0 {
+		cursorPositionText = fmt.Sprintf(" %d of %d (%s)", m.listCursor+1, len(m.visiblePackageLines), filterMode)
+	} else {
+		cursorPositionText = " No results "
+	}
+
+	leftColumn := createCustomBottomBorder("\n"+packageListPanel, cursorPositionText, true)
+
 	if m.isViewingHotkeyPanel {
-		leftCol = lipgloss.JoinVertical(
+		leftColumn = lipgloss.JoinVertical(
 			lipgloss.Left,
-			panelStyle.Render(listPanel),
+			panelStyle.Render(packageListPanel),
 			panelStyle.Render(m.hotkeyViewport.View()),
 		)
 	}
 
-	infoViewport := panelStyle.Render(m.infoViewport.View())
+	packageInfoViewport := panelStyle.Render(m.infoViewport.View())
 
-	return lipgloss.JoinHorizontal(lipgloss.Left, leftCol, infoViewport)
+	return lipgloss.JoinHorizontal(lipgloss.Left, leftColumn, packageInfoViewport)
 }
 
-func (m *installedModel) StatusBar() string {
-	var viewMode string
-	if m.isFilteringExplicitInstall {
-		viewMode = "Explicit"
-	} else {
-		viewMode = "All"
-	}
-
-	counterText := fmt.Sprintf(" %d / %d", m.listCursor+1, len(m.visiblePackageLines))
-
-	listPanelEdge := m.listViewport.Width - len(counterText) + 2
-	viewMode = lipgloss.PlaceHorizontal(listPanelEdge, lipgloss.Right, viewMode)
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Left,
-		counterText,
-		viewMode)
+func (m *installedModel) Title() string {
+	return m.title
 }
 
 func (m *installedModel) toggleExplicitFilter() tea.Cmd {

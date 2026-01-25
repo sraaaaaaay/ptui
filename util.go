@@ -116,6 +116,63 @@ func handleHotkeyAndSearch(m types.PackageListModel, msg tea.KeyMsg) {
 	}
 }
 
+func createCustomBottomBorder(content string, bottomBorderContent string, drawTop bool) string {
+	contentWithDefaultSideBorders := defaultStyle.
+		BorderForeground(darkBlue).
+		Border(standardBorder, drawTop, true, false, true).
+		Render(content)
+
+	// Subtract a space here because having one extra border character
+	// between the custom content and the bottom-right corner looks better.
+	contentWidth := lipgloss.Width(content)
+	bottomBorderContentPadding := contentWidth - lipgloss.Width(bottomBorderContent) - 1
+
+	customBottomBorder := bottomLeftBorder +
+		strings.Repeat(horizontalBorder, bottomBorderContentPadding) +
+		bottomBorderContent +
+		horizontalBorder +
+		bottomRightBorder
+
+	return lipgloss.JoinVertical(lipgloss.Left, contentWithDefaultSideBorders, customBottomBorder)
+}
+
+func withTabConnectorTopBorder(content string, emptySectionStart int, emptySectionLength int) string {
+	contentWidth := lipgloss.Width(content)
+	emptySectionEnd := emptySectionStart + emptySectionLength
+
+	var borderStart string
+	var tabConnectorStart string
+	if emptySectionStart == 0 {
+		borderStart = verticalBorder
+		tabConnectorStart = verticalBorder
+	} else {
+		borderStart = topLeftBorder
+		tabConnectorStart = bottomRightBorder
+	}
+
+	// TODO make this less stupid
+	var customTopBorder strings.Builder
+	for position := range contentWidth {
+		if position == 0 {
+			customTopBorder.WriteString(borderStart)
+		} else if position < emptySectionStart {
+			customTopBorder.WriteString(horizontalBorder)
+		} else if position == emptySectionStart {
+			customTopBorder.WriteString(tabConnectorStart)
+		} else if position == emptySectionEnd-1 {
+			customTopBorder.WriteString(bottomLeftBorder)
+		} else if position > emptySectionStart && position < emptySectionStart+emptySectionLength {
+			customTopBorder.WriteString(" ")
+		} else if position == contentWidth-1 {
+			customTopBorder.WriteString(topRightBorder)
+		} else {
+			customTopBorder.WriteString(horizontalBorder)
+		}
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, customTopBorder.String(), content)
+}
+
 func isUrl(str string) bool {
 	return strings.Contains(str, "https") || strings.Contains(str, "http")
 }

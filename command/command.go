@@ -11,8 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"ptui/types"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 var Program *tea.Program
@@ -113,7 +114,6 @@ func startCommand(args []string, target types.StreamTarget, cb func() tea.Cmd) t
 		}
 
 		cmd := exec.Command("pacman", args...)
-		Program.Println(args)
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {

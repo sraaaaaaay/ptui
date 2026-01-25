@@ -1,9 +1,11 @@
 package main
 
 import (
+	"strings"
 	"time"
 
 	cmd "ptui/command"
+	"ptui/styles"
 	"ptui/types"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,7 +23,6 @@ type rootModel struct {
 
 	termWidth  int
 	termHeight int
-	panelWidth int
 
 	cmds []tea.Cmd
 }
@@ -30,6 +31,29 @@ const (
 	PackageList types.StreamTarget = iota
 	PackageInfo
 	Background
+)
+
+var (
+	yellow       = styles.Yellow
+	defaultStyle = styles.DefaultStyle
+	darkBlue     = styles.DarkBlue
+
+	panelStyle           = styles.PanelStyle
+	reducedEmphasisStyle = styles.ReducedEmphasisStyle
+	selectedStyle        = styles.SelectedStyle
+	windowStyle          = styles.WindowStyle
+	tabStyle             = styles.TabStyle
+	selectedTabStyle     = styles.SelectedTabStyle
+
+	standardBorder    = styles.RoundedBorder
+	topLeftBorder     = styles.TopLeftBorder
+	topRightBorder    = styles.TopRightBorder
+	bottomLeftBorder  = styles.BottomLeftBorder
+	bottomRightBorder = styles.BottomRightBorder
+	horizontalBorder  = styles.HorizontalBorder
+	verticalBorder    = styles.VerticalBorder
+
+	BORDER_WIDTH = styles.BORDER_WIDTH
 )
 
 var header = defaultStyle.Foreground(yellow).Render(`
@@ -69,7 +93,6 @@ func (m *rootModel) Init() tea.Cmd {
 }
 
 func (m *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	m.cmds = m.cmds[:0]
 
 	switch msg := msg.(type) {
@@ -82,13 +105,12 @@ func (m *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.termWidth, m.termHeight = msg.Width, msg.Height
-		m.panelWidth = int(float64(msg.Width) * 0.5)
 
 		for i, tab := range m.tabs {
 			updated, cmd := tab.Update(
 				types.ContentRectMsg{
-					Width:  msg.Width - 3*BORDER_WIDTH,
-					Height: msg.Height - 17},
+					Width:  msg.Width,
+					Height: msg.Height - 16},
 			)
 
 			m.tabs[i] = updated.(types.ChildModel)
@@ -143,43 +165,36 @@ func (m *rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *rootModel) View() string {
-	totalWidth := m.termWidth - BORDER_WIDTH
-	titlePanel := panelStyle.Render(lipgloss.Place(
-		totalWidth,
-		lipgloss.Height(header)-BORDER_WIDTH-1,
-		lipgloss.Center,
-		lipgloss.Center,
-		header,
-	))
+	titlePanel := panelStyle.Width(m.termWidth - BORDER_WIDTH).Render(header)
 
-	installedTab := renderTab(m, "Installed", 0)
-	browseTab := renderTab(m, "Browse", 1)
-
-	tabPanel := windowStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, installedTab, browseTab))
-
-	view := lipgloss.JoinVertical(lipgloss.Left, titlePanel, tabPanel)
-	tabView := lipgloss.PlaceHorizontal(totalWidth, lipgloss.Left, m.tabs[m.selectedTab].View())
-
-	statusBar := m.tabs[m.selectedTab].StatusBar()
-	if m.runningCommandsCount > 0 {
-		statusBar = lipgloss.JoinHorizontal(lipgloss.Left, statusBar, m.spinner.View())
+	var renderedTabs []string
+	for i, tab := range m.tabs {
+		renderedTabs = append(renderedTabs, renderTab(m, tab.Title(), i))
 	}
 
-	tabView = panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, tabView, statusBar))
-	view = lipgloss.JoinVertical(lipgloss.Center, view, tabView)
+	tabPanel := windowStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, renderedTabs...))
 
-	return windowStyle.Width(m.termWidth).Height(m.termHeight).Render(view)
+	view := lipgloss.JoinVertical(lipgloss.Left, titlePanel, tabPanel)
+
+	tabView := m.tabs[m.selectedTab].View()
+
+	lengthToSelectedTabStart := lipgloss.Width(strings.Join(renderedTabs[0:m.selectedTab], ""))
+	tabView = withTabConnectorTopBorder(tabView, lengthToSelectedTabStart, lipgloss.Width(renderedTabs[m.selectedTab]))
+
+	view = lipgloss.JoinVertical(lipgloss.Left, view, tabView)
+
+	return windowStyle.MaxWidth(m.termWidth).Height(m.termHeight).Render(view)
 }
 
 func (m *rootModel) InitSelectedTab() tea.Cmd {
 	return m.tabs[m.selectedTab].Init()
 }
 
-func renderTab(m *rootModel, title string, index int) (result string) {
+func renderTab(m *rootModel, title string, index int) (renderedTab string) {
 	if m.selectedTab == index {
-		result = selectedTabStyle.Render(title)
+		renderedTab = selectedTabStyle.Render(title)
 	} else {
-		result = tabStyle.Render(reducedEmphasisStyle.Render(title))
+		renderedTab = tabStyle.Render(reducedEmphasisStyle.Render(title))
 	}
-	return result
+	return renderedTab
 }
